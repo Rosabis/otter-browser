@@ -133,6 +133,21 @@ jobs:
           Write-Host "QtWebKit directory already exists"
         }
         
+        # 修改 QtWebKit CMake 配置以禁用 Qt6 查找
+        Write-Host "Patching QtWebKit CMake files to disable Qt6..."
+        $optionsQtFile = "qtwebkit\Source\cmake\OptionsQt.cmake"
+        if (Test-Path $optionsQtFile) {
+          $content = Get-Content $optionsQtFile -Raw
+          # 注释掉所有 Qt6 相关的 find_package 调用
+          $content = $content -replace 'find_package\(Qt6', '# find_package(Qt6 - DISABLED FOR Qt5 BUILD'
+          # 也禁用任何 Qt6 版本检查
+          $content = $content -replace 'if\(Qt6_FOUND', '# if(Qt6_FOUND - DISABLED'
+          Set-Content -Path $optionsQtFile -Value $content -NoNewline
+          Write-Host "Patched OptionsQt.cmake to disable Qt6"
+        } else {
+          Write-Host "Warning: OptionsQt.cmake not found, Qt6 may still be searched"
+        }
+        
         # 创建构建目录
         New-Item -ItemType Directory -Force -Path qtwebkit-build | Out-Null
         
@@ -141,6 +156,11 @@ jobs:
         Push-Location qtwebkit-build
         
         # 使用 Visual Studio 2022 生成器
+        # 明确指定使用 Qt5，避免查找 Qt6
+        # 设置环境变量强制使用 Qt5
+        $env:CMAKE_PREFIX_PATH = "$qtDir"
+        $env:Qt5_DIR = "$qtDir\lib\cmake\Qt5"
+        
         cmake ..\qtwebkit `
           -G "Visual Studio 17 2022" `
           -A x64 `
@@ -149,7 +169,9 @@ jobs:
           -DPORT=Qt `
           -DCMAKE_INSTALL_PREFIX="$qtDir" `
           -DENABLE_TOOLS=OFF `
-          -DENABLE_API_TESTS=OFF
+          -DENABLE_API_TESTS=OFF `
+          -DQt5_DIR="$qtDir\lib\cmake\Qt5" `
+          -Wno-dev
         
         if ($LASTEXITCODE -ne 0) {
           Write-Host "CMake configuration failed"
