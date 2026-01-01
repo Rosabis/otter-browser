@@ -21,18 +21,8 @@ jobs:
       with:
         version: '5.15.2'
         arch: 'win64_msvc2019_64'
+        modules: 'qtwebengine'
         cache: true
-        
-    - name: 安装 QtWebKit (如果需要)
-      shell: powershell
-      env:
-        QT_DIR: ${{ steps.qt.outputs.qt-dir }}
-      run: |
-        # QtWebKit needs to be installed separately as it was removed after Qt 5.6
-        # If QtWebKit is already installed, CMake will find it automatically
-        # Otherwise, it needs to be compiled from source or use a precompiled version
-        Write-Host "Note: QtWebKit needs to be installed separately. If not installed, CMake configuration may fail."
-        Write-Host "Qt path: $env:QT_DIR"
         
     - name: 安装 CMake
       uses: jwlawson/actions-setup-cmake@v1.14
@@ -53,8 +43,8 @@ jobs:
         cmake .. `
           -DCMAKE_BUILD_TYPE=Release `
           -DCMAKE_PREFIX_PATH="$env:QT_DIR" `
-          -DENABLE_QTWEBENGINE=OFF `
-          -DENABLE_QTWEBKIT=ON `
+          -DENABLE_QTWEBENGINE=ON `
+          -DENABLE_QTWEBKIT=OFF `
           -DENABLE_SPELLCHECK=OFF
           
     - name: 编译项目
