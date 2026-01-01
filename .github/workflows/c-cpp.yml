@@ -48,28 +48,54 @@ jobs:
         Write-Host "Perl version:"
         perl --version
         
-    - name: 安装 SQLite3
-      shell: powershell
-      id: install-sqlite3
-      run: |
-        Write-Host "Installing SQLite3 via vcpkg..."
-        # 使用 vcpkg 安装 SQLite3（最简单可靠的方法）
-        if (-not (Test-Path "vcpkg")) {
-          git clone https://github.com/Microsoft/vcpkg.git vcpkg
-        }
-        Push-Location vcpkg
-        if (-not (Test-Path "vcpkg.exe")) {
-          .\bootstrap-vcpkg.bat
-        }
-        .\vcpkg install sqlite3:x64-windows
-        Pop-Location
-        
-        # 设置 SQLite3 路径
-        $vcpkgRoot = "$PWD\vcpkg"
-        $sqlite3Root = "$vcpkgRoot\installed\x64-windows"
-        Write-Host "SQLite3 installed at: $sqlite3Root"
-        echo "sqlite3-root=$sqlite3Root" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
-        echo "vcpkg-root=$vcpkgRoot" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+     - name: 安装 SQLite3
+       shell: powershell
+       id: install-sqlite3
+       run: |
+         Write-Host "Installing SQLite3 via vcpkg..."
+         # 使用 vcpkg 安装 SQLite3（最简单可靠的方法）
+         if (-not (Test-Path "vcpkg")) {
+           git clone https://github.com/Microsoft/vcpkg.git vcpkg
+         }
+         Push-Location vcpkg
+         if (-not (Test-Path "vcpkg.exe")) {
+           Write-Host "Bootstrapping vcpkg..."
+           .\bootstrap-vcpkg.bat
+         }
+         Write-Host "Installing sqlite3:x64-windows..."
+         .\vcpkg install sqlite3:x64-windows
+         if ($LASTEXITCODE -ne 0) {
+           Write-Host "vcpkg install failed, trying again..."
+           .\vcpkg install sqlite3:x64-windows --recurse
+         }
+         Pop-Location
+         
+         # 设置 SQLite3 路径
+         $vcpkgRoot = "$PWD\vcpkg"
+         $sqlite3Root = "$vcpkgRoot\installed\x64-windows"
+         
+         # 验证安装
+         $sqlite3Lib = "$sqlite3Root\lib\sqlite3.lib"
+         $sqlite3Dll = "$sqlite3Root\bin\sqlite3.dll"
+         $sqlite3Include = "$sqlite3Root\include"
+         
+         Write-Host "Verifying SQLite3 installation..."
+         Write-Host "  Library: $sqlite3Lib (exists: $(Test-Path $sqlite3Lib))"
+         Write-Host "  DLL: $sqlite3Dll (exists: $(Test-Path $sqlite3Dll))"
+         Write-Host "  Include: $sqlite3Include (exists: $(Test-Path $sqlite3Include))"
+         
+         if (-not (Test-Path $sqlite3Lib)) {
+           Write-Host "Error: SQLite3 library not found after installation"
+           Write-Host "Listing vcpkg installed packages:"
+           Push-Location $vcpkgRoot
+           .\vcpkg list
+           Pop-Location
+           exit 1
+         }
+         
+         Write-Host "SQLite3 installed successfully at: $sqlite3Root"
+         echo "sqlite3-root=$sqlite3Root" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+         echo "vcpkg-root=$vcpkgRoot" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
         
     - name: 查找 Qt 安装路径
       shell: powershell
@@ -160,20 +186,51 @@ jobs:
           Write-Host "QtWebKit directory already exists"
         }
         
-        # 修改 QtWebKit CMake 配置以禁用 Qt6 查找
-        Write-Host "Patching QtWebKit CMake files to disable Qt6..."
-        $optionsQtFile = "qtwebkit\Source\cmake\OptionsQt.cmake"
-        if (Test-Path $optionsQtFile) {
-          $content = Get-Content $optionsQtFile -Raw
-          # 注释掉所有 Qt6 相关的 find_package 调用
-          $content = $content -replace 'find_package\(Qt6', '# find_package(Qt6 - DISABLED FOR Qt5 BUILD'
-          # 也禁用任何 Qt6 版本检查
-          $content = $content -replace 'if\(Qt6_FOUND', '# if(Qt6_FOUND - DISABLED'
-          Set-Content -Path $optionsQtFile -Value $content -NoNewline
-          Write-Host "Patched OptionsQt.cmake to disable Qt6"
-        } else {
-          Write-Host "Warning: OptionsQt.cmake not found, Qt6 may still be searched"
-        }
+         # 修改 QtWebKit CMake 配置以禁用 Qt6 查找
+         Write-Host "Patching QtWebKit CMake files to disable Qt6..."
+         $optionsQtFile = "qtwebkit\Source\cmake\OptionsQt.cmake"
+         if (Test-Path $optionsQtFile) {
+           $lines = Get-Content $optionsQtFile
+           $patchedLines = @()
+           $inQt6Block = $false
+           $braceCount = 0
+           
+           foreach ($line in $lines) {
+             # 检测 Qt6 相关的代码块
+             if ($line -match 'find_package\(Qt6' -or $line -match 'if\s*\(Qt6_FOUND' -or $line -match 'Qt6::') {
+               # 注释掉包含 Qt6 的行
+               if (-not $line.TrimStart().StartsWith('#')) {
+                 $patchedLines += "# DISABLED FOR Qt5 BUILD: " + $line
+               } else {
+                 $patchedLines += $line
+               }
+               # 检查是否是代码块开始
+               if ($line -match '\{') {
+                 $inQt6Block = $true
+                 $braceCount++
+               }
+             } elseif ($inQt6Block) {
+               # 在 Qt6 代码块中，继续注释
+               if ($line -match '\{') { $braceCount++ }
+               if ($line -match '\}') { 
+                 $braceCount--
+                 if ($braceCount -eq 0) { $inQt6Block = $false }
+               }
+               if (-not $line.TrimStart().StartsWith('#')) {
+                 $patchedLines += "# " + $line
+               } else {
+                 $patchedLines += $line
+               }
+             } else {
+               $patchedLines += $line
+             }
+           }
+           
+           Set-Content -Path $optionsQtFile -Value ($patchedLines -join "`n")
+           Write-Host "Patched OptionsQt.cmake to disable Qt6"
+         } else {
+           Write-Host "Warning: OptionsQt.cmake not found, Qt6 may still be searched"
+         }
         
         # 创建构建目录
         New-Item -ItemType Directory -Force -Path qtwebkit-build | Out-Null
@@ -197,18 +254,43 @@ jobs:
           exit 1
         }
         
-        cmake ..\qtwebkit `
-          -G "Visual Studio 17 2022" `
-          -A x64 `
-          -DCMAKE_BUILD_TYPE=Release `
-          -DCMAKE_PREFIX_PATH="$qtDir" `
-          -DCMAKE_TOOLCHAIN_FILE="$vcpkgToolchain" `
-          -DPORT=Qt `
-          -DCMAKE_INSTALL_PREFIX="$qtDir" `
-          -DENABLE_TOOLS=OFF `
-          -DENABLE_API_TESTS=OFF `
-          -DQt5_DIR="$qtDir\lib\cmake\Qt5" `
-          -Wno-dev
+         # 验证 SQLite3 是否已安装
+         $sqlite3Lib = "$sqlite3Root\lib\sqlite3.lib"
+         $sqlite3Include = "$sqlite3Root\include"
+         if (-not (Test-Path $sqlite3Lib)) {
+           Write-Host "Error: SQLite3 library not found at $sqlite3Lib"
+           Write-Host "Reinstalling SQLite3..."
+           Push-Location $vcpkgRoot
+           .\vcpkg install sqlite3:x64-windows --recurse
+           Pop-Location
+         }
+         
+         # 手动指定 SQLite3 路径（作为备用）
+         $cmakeArgs = @(
+           "..\qtwebkit",
+           "-G", "Visual Studio 17 2022",
+           "-A", "x64",
+           "-DCMAKE_BUILD_TYPE=Release",
+           "-DCMAKE_PREFIX_PATH=$qtDir",
+           "-DCMAKE_TOOLCHAIN_FILE=$vcpkgToolchain",
+           "-DPORT=Qt",
+           "-DCMAKE_INSTALL_PREFIX=$qtDir",
+           "-DENABLE_TOOLS=OFF",
+           "-DENABLE_API_TESTS=OFF",
+           "-DQt5_DIR=$qtDir\lib\cmake\Qt5",
+           "-Wno-dev"
+         )
+         
+         # 如果 vcpkg 工具链找不到 SQLite3，手动指定
+         if (Test-Path $sqlite3Include -and Test-Path $sqlite3Lib) {
+           $cmakeArgs += "-DSQLite3_INCLUDE_DIR=$sqlite3Include"
+           $cmakeArgs += "-DSQLite3_LIBRARY=$sqlite3Lib"
+           Write-Host "Manually specifying SQLite3 paths:"
+           Write-Host "  Include: $sqlite3Include"
+           Write-Host "  Library: $sqlite3Lib"
+         }
+         
+         cmake @cmakeArgs
         
         if ($LASTEXITCODE -ne 0) {
           Write-Host "CMake configuration failed"
