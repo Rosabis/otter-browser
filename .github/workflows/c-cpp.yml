@@ -21,13 +21,108 @@ jobs:
       with:
         version: '5.15.2'
         arch: 'win64_msvc2019_64'
-        modules: 'qtwebengine'
         cache: true
         
     - name: 安装 CMake
       uses: jwlawson/actions-setup-cmake@v1.14
       with:
         cmake-version: '3.27'
+        
+    - name: 安装 Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+        
+    - name: 安装 Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        
+    - name: 安装 Perl
+      shell: powershell
+      run: |
+        Write-Host "Installing Strawberry Perl..."
+        choco install strawberryperl -y
+        # 刷新 PATH
+        $env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User")
+        Write-Host "Perl version:"
+        perl --version
+        
+    - name: 编译 QtWebKit
+      shell: powershell
+      env:
+        QT_DIR: ${{ steps.qt.outputs.qt-dir }}
+      run: |
+        Write-Host "Qt directory: $env:QT_DIR"
+        
+        # 检查是否已安装 QtWebKit
+        $qtWebKitDll = "$env:QT_DIR\bin\Qt5WebKit.dll"
+        if (Test-Path $qtWebKitDll) {
+          Write-Host "QtWebKit already installed, skipping compilation"
+          exit 0
+        }
+        
+        # 克隆 QtWebKit 源代码 (使用 qtwebkit-5.212 分支)
+        Write-Host "Cloning QtWebKit source code..."
+        if (-not (Test-Path "qtwebkit")) {
+          git clone --depth 1 --branch qtwebkit-5.212 https://github.com/movableink/webkit.git qtwebkit
+        } else {
+          Write-Host "QtWebKit directory already exists, updating..."
+          Push-Location qtwebkit
+          git fetch --depth 1 origin qtwebkit-5.212
+          git checkout qtwebkit-5.212
+          Pop-Location
+        }
+        
+        # 创建构建目录
+        New-Item -ItemType Directory -Force -Path qtwebkit-build | Out-Null
+        
+        # 配置 QtWebKit
+        Write-Host "Configuring QtWebKit..."
+        Push-Location qtwebkit-build
+        
+        # 使用 Visual Studio 2022 生成器
+        cmake ..\qtwebkit `
+          -G "Visual Studio 17 2022" `
+          -A x64 `
+          -DCMAKE_BUILD_TYPE=Release `
+          -DCMAKE_PREFIX_PATH="$env:QT_DIR" `
+          -DPORT=Qt `
+          -DCMAKE_INSTALL_PREFIX="$env:QT_DIR" `
+          -DENABLE_TOOLS=OFF `
+          -DENABLE_API_TESTS=OFF
+        
+        if ($LASTEXITCODE -ne 0) {
+          Write-Host "CMake configuration failed"
+          Pop-Location
+          exit 1
+        }
+        
+        # 编译 QtWebKit (这可能需要很长时间，使用所有可用核心)
+        Write-Host "Building QtWebKit (this may take 1-3 hours)..."
+        $cpuCount = (Get-CimInstance Win32_ComputerSystem).NumberOfLogicalProcessors
+        Write-Host "Using $cpuCount parallel jobs"
+        cmake --build . --config Release --parallel $cpuCount
+        
+        if ($LASTEXITCODE -ne 0) {
+          Write-Host "QtWebKit build failed"
+          Pop-Location
+          exit 1
+        }
+        
+        # 安装 QtWebKit 到 Qt 目录
+        Write-Host "Installing QtWebKit..."
+        cmake --install . --config Release
+        
+        Pop-Location
+        Write-Host "QtWebKit compilation completed successfully"
+        
+        # 验证安装
+        if (Test-Path $qtWebKitDll) {
+          Write-Host "QtWebKit installation verified: $qtWebKitDll"
+        } else {
+          Write-Host "Warning: QtWebKit DLL not found after installation"
+        }
         
     - name: 配置构建目录
       shell: powershell
@@ -43,8 +138,8 @@ jobs:
         cmake .. `
           -DCMAKE_BUILD_TYPE=Release `
           -DCMAKE_PREFIX_PATH="$env:QT_DIR" `
-          -DENABLE_QTWEBENGINE=ON `
-          -DENABLE_QTWEBKIT=OFF `
+          -DENABLE_QTWEBENGINE=OFF `
+          -DENABLE_QTWEBKIT=ON `
           -DENABLE_SPELLCHECK=OFF
           
     - name: 编译项目
@@ -124,7 +219,7 @@ jobs:
         if (Test-Path $windeployqt) {
           Write-Host "Deploying Qt dependencies..."
           
-          # 部署基本 Qt 依赖（包含翻译文件，因为 QtWebEngine 可能需要）
+          # 部署基本 Qt 依赖
           & $windeployqt `
             --release `
             --qmldir "$PWD" `
@@ -133,44 +228,35 @@ jobs:
             --no-compiler-runtime `
             "release\otter-browser.exe"
           
-          Write-Host "Checking for QtWebEngine dependencies..."
+          Write-Host "Checking for QtWebKit dependencies..."
           
-          # 查找并复制 QtWebEngine 的资源文件
-          # QtWebEngine 资源文件可能在多个位置
-          $possibleResourcePaths = @(
-            "$qtDir\resources",
-            "$qtDir\..\resources"
-          )
-          
-          foreach ($resourcePath in $possibleResourcePaths) {
-            if (Test-Path $resourcePath) {
-              Write-Host "Found resources at: $resourcePath"
-              New-Item -ItemType Directory -Force -Path "release\resources" -ErrorAction SilentlyContinue
-              Copy-Item -Path "$resourcePath\*" -Destination "release\resources\" -Recurse -Force
-              break
-            }
-          }
-          
-          # 复制 QtWebEngine 进程可执行文件
-          $qtWebEngineProcess = "$qtDir\bin\QtWebEngineProcess.exe"
-          if (Test-Path $qtWebEngineProcess) {
-            Write-Host "Copying QtWebEngineProcess.exe"
-            Copy-Item -Path $qtWebEngineProcess -Destination "release\" -Force
-          } else {
-            Write-Host "Warning: QtWebEngineProcess.exe not found at $qtWebEngineProcess"
-          }
-          
-          # 确保所有 QtWebEngine DLL 文件都被复制
+          # 确保所有 QtWebKit DLL 文件都被复制
           $qtBinDir = "$qtDir\bin"
-          $webEngineDlls = Get-ChildItem -Path $qtBinDir -Filter "Qt5WebEngine*.dll" -ErrorAction SilentlyContinue
-          if ($webEngineDlls) {
-            Write-Host "Copying QtWebEngine DLL files:"
-            foreach ($dll in $webEngineDlls) {
+          $webKitDlls = Get-ChildItem -Path $qtBinDir -Filter "Qt5WebKit*.dll" -ErrorAction SilentlyContinue
+          if ($webKitDlls) {
+            Write-Host "Copying QtWebKit DLL files:"
+            foreach ($dll in $webKitDlls) {
               Write-Host "  - $($dll.Name)"
               Copy-Item -Path $dll.FullName -Destination "release\" -Force
             }
           } else {
-            Write-Host "Warning: No QtWebEngine DLL files found in $qtBinDir"
+            Write-Host "Warning: No QtWebKit DLL files found in $qtBinDir"
+          }
+          
+          # 复制 QtWebKit 插件
+          $qtPluginsDir = "$qtDir\plugins"
+          if (Test-Path "$qtPluginsDir\webkit") {
+            Write-Host "Copying QtWebKit plugins..."
+            New-Item -ItemType Directory -Force -Path "release\plugins\webkit" -ErrorAction SilentlyContinue
+            Copy-Item -Path "$qtPluginsDir\webkit\*" -Destination "release\plugins\webkit\" -Recurse -Force
+          }
+          
+          # 复制 QtWebKit 翻译文件
+          $qtTranslationsDir = "$qtDir\translations"
+          if (Test-Path "$qtTranslationsDir\qtwebkit_*.qm") {
+            Write-Host "Copying QtWebKit translations..."
+            New-Item -ItemType Directory -Force -Path "release\translations" -ErrorAction SilentlyContinue
+            Copy-Item -Path "$qtTranslationsDir\qtwebkit_*.qm" -Destination "release\translations\" -Force
           }
           
           # 列出部署后的文件以验证
