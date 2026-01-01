@@ -1,6 +1,6 @@
 /**************************************************************************
 * Otter Browser: Web browser controlled by the user, not vice-versa.
-* Copyright (C) 2022 - 2023 Michal Dutkiewicz aka Emdek <michal@emdek.pl>
+* Copyright (C) 2022 - 2025 Michal Dutkiewicz aka Emdek <michal@emdek.pl>
 *
 * This program is free software: you can redistribute it and/or modify
 * it under the terms of the GNU General Public License as published by
@@ -167,11 +167,13 @@ void AddonsPage::updateAddonEntry(Addon *addon)
 
 		if (index.data(IdentifierRole) == identifier)
 		{
+			const QModelIndex siblingIndex(index.sibling(i, 1));
+
 			m_ui->addonsViewWidget->setData(index, getAddonIcon(addon), Qt::DecorationRole);
 			m_ui->addonsViewWidget->setData(index, addon->getTitle(), Qt::DisplayRole);
 			m_ui->addonsViewWidget->setData(index, addon->getDescription(), Qt::ToolTipRole);
-			m_ui->addonsViewWidget->setData(index.sibling(i, 1), addon->getVersion(), Qt::DisplayRole);
-			m_ui->addonsViewWidget->setData(index.sibling(i, 1), getAddonToolTip(addon), Qt::ToolTipRole);
+			m_ui->addonsViewWidget->setData(siblingIndex, addon->getVersion(), Qt::DisplayRole);
+			m_ui->addonsViewWidget->setData(siblingIndex, getAddonToolTip(addon), Qt::ToolTipRole);
 
 			return;
 		}
@@ -244,7 +246,7 @@ void AddonsPage::showContextMenu(const QPoint &position)
 	QMenu menu(this);
 	menu.addAction(tr("Add Addon…"), this, &AddonsPage::addAddon);
 
-	if (m_ui->addonsViewWidget->selectionModel()->hasSelection())
+	if (m_ui->addonsViewWidget->hasSelection())
 	{
 		menu.addSeparator();
 		menu.addAction(tr("Open Addon File"), this, &AddonsPage::openAddons)->setEnabled(canOpenAddons());

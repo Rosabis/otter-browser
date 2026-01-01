@@ -1,6 +1,6 @@
 /**************************************************************************
 * Otter Browser: Web browser controlled by the user, not vice-versa.
-* Copyright (C) 2016 - 2024 Michal Dutkiewicz aka Emdek <michal@emdek.pl>
+* Copyright (C) 2016 - 2025 Michal Dutkiewicz aka Emdek <michal@emdek.pl>
 *
 * This program is free software: you can redistribute it and/or modify
 * it under the terms of the GNU General Public License as published by
@@ -201,7 +201,7 @@ void PasswordsContentsWidget::populatePasswords()
 			hostItem->appendRow({setItem, new QStandardItem()});
 		}
 
-		hostItem->setText(QStringLiteral("%1 (%2)").arg(host).arg(hostItem->rowCount()));
+		hostItem->setText(QStringLiteral("%1 (%2)").arg(host, QString::number(hostItem->rowCount())));
 
 		m_model->appendRow(hostItem);
 
@@ -225,7 +225,7 @@ void PasswordsContentsWidget::populatePasswords()
 		emit loadingStateChanged(WebWidget::FinishedLoadingState);
 
 		connect(PasswordsManager::getInstance(), &PasswordsManager::passwordsModified, this, &PasswordsContentsWidget::populatePasswords);
-		connect(m_ui->passwordsViewWidget->selectionModel(), &QItemSelectionModel::selectionChanged, [&]()
+		connect(m_ui->passwordsViewWidget->selectionModel(), &QItemSelectionModel::selectionChanged, this, [&]()
 		{
 			emit arbitraryActionsStateChanged({ActionsManager::DeleteAction});
 		});
@@ -286,28 +286,28 @@ void PasswordsContentsWidget::removePasswords()
 
 	for (int i = 0; i < indexes.count(); ++i)
 	{
-		if (!indexes.at(i).isValid() || indexes.at(i).column() > 0)
+		const QModelIndex index(indexes.at(i));
+
+		if (!index.isValid() || index.column() > 0)
 		{
 			continue;
 		}
 
-		if (indexes.at(i).parent() == m_model->invisibleRootItem()->index())
+		if (index.parent() == m_model->invisibleRootItem()->index())
 		{
-			const QModelIndex hostIndex(indexes.at(i));
-
-			if (!hostIndex.isValid())
+			if (!index.isValid())
 			{
 				continue;
 			}
 
-			for (int j = 0; j < m_model->rowCount(hostIndex); ++j)
+			for (int j = 0; j < m_model->rowCount(index); ++j)
 			{
-				passwords.append(getPassword(m_model->index(j, 0, hostIndex)));
+				passwords.append(getPassword(m_model->index(j, 0, index)));
 			}
 		}
 		else
 		{
-			const QModelIndex setIndex((indexes.at(i).parent().parent() == m_model->invisibleRootItem()->index()) ? indexes.at(i) : indexes.at(i).parent());
+			const QModelIndex setIndex((index.parent().parent() == m_model->invisibleRootItem()->index()) ? index : index.parent());
 
 			if (setIndex.isValid())
 			{
@@ -447,17 +447,19 @@ void PasswordsContentsWidget::showContextMenu(const QPoint &position)
 		{
 			if (index.parent().parent().isValid() && index.parent().parent().parent() == m_model->invisibleRootItem()->index())
 			{
-				const QModelIndex valueIndex(index.sibling(index.row(), 0));
-
 				menu.addAction(tr("Copy Field Name"), this, [&]()
 				{
-					if (valueIndex.isValid())
+					const QModelIndex nameIndex(index.sibling(index.row(), 0));
+
+					if (nameIndex.isValid())
 					{
-						QGuiApplication::clipboard()->setText(valueIndex.data(Qt::DisplayRole).toString());
+						QGuiApplication::clipboard()->setText(nameIndex.data(Qt::DisplayRole).toString());
 					}
 				});
 				menu.addAction(tr("Copy Field Value"), this, [&]()
 				{
+					const QModelIndex valueIndex(index.sibling(index.row(), 1));
+
 					if (valueIndex.isValid())
 					{
 						QGuiApplication::clipboard()->setText(valueIndex.data(Qt::DisplayRole).toString());
@@ -508,7 +510,7 @@ QLatin1String PasswordsContentsWidget::getType() const
 
 QUrl PasswordsContentsWidget::getUrl() const
 {
-	return QUrl(QLatin1String("about:passwords"));
+	return {QLatin1String("about:passwords")};
 }
 
 QIcon PasswordsContentsWidget::getIcon() const
@@ -532,7 +534,7 @@ ActionsManager::ActionDefinition::State PasswordsContentsWidget::getActionState(
 			return state;
 		default:
 			break;
-		}
+	}
 
 	return ContentsWidget::getActionState(identifier, parameters);
 }

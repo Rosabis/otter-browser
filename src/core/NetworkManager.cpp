@@ -1,6 +1,6 @@
 /**************************************************************************
 * Otter Browser: Web browser controlled by the user, not vice-versa.
-* Copyright (C) 2013 - 2024 Michal Dutkiewicz aka Emdek <michal@emdek.pl>
+* Copyright (C) 2013 - 2025 Michal Dutkiewicz aka Emdek <michal@emdek.pl>
 * Copyright (C) 2014 Piotr Wójcik <chocimier@tlen.pl>
 * Copyright (C) 2015 - 2017 Jan Bajer aka bajasoft <jbajer@gmail.com>
 *
@@ -44,7 +44,7 @@ NetworkManager::NetworkManager(bool isPrivate, QObject *parent) : QNetworkAccess
 
 	if (isPrivate)
 	{
-		m_cookieJar = new CookieJar({}, this);
+		m_cookieJar = new DiskCookieJar({}, this);
 
 		setCookieJar(m_cookieJar);
 	}
@@ -161,7 +161,7 @@ QNetworkReply* NetworkManager::createRequest(QNetworkAccessManager::Operation op
 
 	if (operation == PostOperation && mutableRequest.header(QNetworkRequest::ContentTypeHeader).isNull())
 	{
-		mutableRequest.setHeader(QNetworkRequest::ContentTypeHeader, QVariant(QLatin1String("application/x-www-form-urlencoded")));
+		mutableRequest.setHeader(QNetworkRequest::ContentTypeHeader, QLatin1String("application/x-www-form-urlencoded"));
 	}
 
 	if (NetworkManagerFactory::isWorkingOffline())
@@ -193,7 +193,7 @@ NetworkManager::ResourceType NetworkManager::getResourceType(const QNetworkReque
 		return SubFrameType;
 	}
 
-	if (acceptHeader.contains(QByteArrayLiteral("image/")) || path.endsWith(QLatin1String(".png")) || path.endsWith(QLatin1String(".jpg")) || path.endsWith(QLatin1String(".gif")) || path.endsWith(QLatin1String(".webp")))
+	if (acceptHeader.contains(QByteArrayLiteral("image/")) || path.endsWith(QLatin1String(".png")) || path.endsWith(QLatin1String(".jpg")) || path.endsWith(QLatin1String(".jpeg")) || path.endsWith(QLatin1String(".gif")) || path.endsWith(QLatin1String(".webp")))
 	{
 		return ImageType;
 	}

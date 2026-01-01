@@ -1,6 +1,6 @@
 /**************************************************************************
 * Otter Browser: Web browser controlled by the user, not vice-versa.
-* Copyright (C) 2016 - 2024 Michal Dutkiewicz aka Emdek <michal@emdek.pl>
+* Copyright (C) 2016 - 2025 Michal Dutkiewicz aka Emdek <michal@emdek.pl>
 *
 * This program is free software: you can redistribute it and/or modify
 * it under the terms of the GNU General Public License as published by
@@ -121,6 +121,8 @@ ThemesManager* ThemesManager::m_instance(nullptr);
 ColorScheme* ThemesManager::m_colorScheme(nullptr);
 QWidget* ThemesManager::m_probeWidget(nullptr);
 QString ThemesManager::m_iconThemePath(QLatin1String(":/icons/theme/"));
+QFileIconProvider ThemesManager::m_fileIconProvider;
+QMimeDatabase ThemesManager::m_mimeDatabase;
 bool ThemesManager::m_useSystemIconTheme(false);
 
 ThemesManager::ThemesManager(QObject *parent) : QObject(parent)
@@ -273,7 +275,7 @@ QIcon ThemesManager::createIcon(const QString &name, bool fromTheme, IconContext
 
 	if (name.startsWith(QLatin1String("data:image/")))
 	{
-		return QIcon(Utils::loadPixmapFromDataUri(name));
+		return {Utils::loadPixmapFromDataUri(name)};
 	}
 
 	if (m_useSystemIconTheme && fromTheme && QIcon::hasThemeIcon(name))
@@ -296,6 +298,20 @@ QIcon ThemesManager::createIcon(const QString &name, bool fromTheme, IconContext
 	}
 
 	return {};
+}
+
+QIcon ThemesManager::getFileTypeIcon(const QString &path)
+{
+	const QString iconName(m_mimeDatabase.mimeTypeForFile(path).iconName());
+
+	return QIcon::fromTheme(iconName, m_fileIconProvider.icon(QFileInfo(path)));
+}
+
+QIcon ThemesManager::getFileTypeIcon(const QMimeType &mimeType)
+{
+	const QString iconName(mimeType.iconName());
+
+	return QIcon::fromTheme(iconName, m_fileIconProvider.icon(QFileIconProvider::File));
 }
 
 bool ThemesManager::eventFilter(QObject *object, QEvent *event)

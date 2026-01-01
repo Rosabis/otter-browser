@@ -1,6 +1,6 @@
 /**************************************************************************
 * Otter Browser: Web browser controlled by the user, not vice-versa.
-* Copyright (C) 2013 - 2023 Michal Dutkiewicz aka Emdek <michal@emdek.pl>
+* Copyright (C) 2013 - 2025 Michal Dutkiewicz aka Emdek <michal@emdek.pl>
 * Copyright (C) 2014 - 2017 Jan Bajer aka bajasoft <jbajer@gmail.com>
 *
 * This program is free software: you can redistribute it and/or modify
@@ -330,10 +330,12 @@ void SearchWidget::mouseReleaseEvent(QMouseEvent *event)
 
 			for (int i = 0; i < searchEngines.count(); ++i)
 			{
-				if (!SearchEnginesManager::hasSearchEngine(searchEngines.at(i).url))
+				const WebWidget::LinkUrl searchEngine(searchEngines.at(i));
+
+				if (!SearchEnginesManager::hasSearchEngine(searchEngine.url))
 				{
-					Action *action(new Action(ActionsManager::AddSearchAction, {{QLatin1String("url"), searchEngines.at(i).url}}, executor, this));
-					action->setTextOverride(tr("Add %1").arg(searchEngines.at(i).title.isEmpty() ? tr("(untitled)") : searchEngines.at(i).title));
+					Action *action(new Action(ActionsManager::AddSearchAction, {{QLatin1String("url"), searchEngine.url}}, executor, this));
+					action->setTextOverride(tr("Add %1").arg(searchEngine.title.isEmpty() ? tr("(untitled)") : searchEngine.title));
 					action->setIconOverride(m_window->getIcon());
 
 					menu.addAction(action);
@@ -742,16 +744,18 @@ void SearchWidget::setWindow(Window *window)
 
 	if (m_window && !m_window->isAboutToClose() && (!sender() || sender() != m_window))
 	{
+		WebWidget *webWidget(m_window->getWebWidget());
+
 		disconnect(this, &SearchWidget::requestedSearch, m_window.data(), &Window::requestedSearch);
 		disconnect(m_window.data(), &Window::loadingStateChanged, this, &SearchWidget::handleLoadingStateChanged);
 		disconnect(m_window.data(), &Window::optionChanged, this, &SearchWidget::handleWindowOptionChanged);
 		disconnect(m_window->getMainWindow(), &MainWindow::activeWindowChanged, this, &SearchWidget::hidePopup);
 
-		if (m_window->getWebWidget())
+		if (webWidget)
 		{
-			m_window->getWebWidget()->stopWatchingChanges(this, WebWidget::SearchEnginesWatcher);
+			webWidget->stopWatchingChanges(this, WebWidget::SearchEnginesWatcher);
 
-			connect(m_window->getWebWidget(), &WebWidget::watchedDataChanged, this, &SearchWidget::handleWatchedDataChanged);
+			connect(webWidget, &WebWidget::watchedDataChanged, this, &SearchWidget::handleWatchedDataChanged);
 		}
 	}
 
@@ -759,6 +763,8 @@ void SearchWidget::setWindow(Window *window)
 
 	if (window)
 	{
+		WebWidget *webWidget(window->getWebWidget());
+
 		if (mainWindow)
 		{
 			disconnect(this, &SearchWidget::requestedSearch, mainWindow, &MainWindow::search);
@@ -778,11 +784,11 @@ void SearchWidget::setWindow(Window *window)
 			}
 		});
 
-		if (window->getWebWidget())
+		if (webWidget)
 		{
-			window->getWebWidget()->startWatchingChanges(this, WebWidget::SearchEnginesWatcher);
+			webWidget->startWatchingChanges(this, WebWidget::SearchEnginesWatcher);
 
-			connect(window->getWebWidget(), &WebWidget::watchedDataChanged, this, &SearchWidget::handleWatchedDataChanged);
+			connect(webWidget, &WebWidget::watchedDataChanged, this, &SearchWidget::handleWatchedDataChanged);
 		}
 
 		const ToolBarWidget *toolBar(qobject_cast<ToolBarWidget*>(parentWidget()));

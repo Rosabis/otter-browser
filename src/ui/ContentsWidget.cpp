@@ -1,6 +1,6 @@
 /**************************************************************************
 * Otter Browser: Web browser controlled by the user, not vice-versa.
-* Copyright (C) 2013 - 2022 Michal Dutkiewicz aka Emdek <michal@emdek.pl>
+* Copyright (C) 2013 - 2025 Michal Dutkiewicz aka Emdek <michal@emdek.pl>
 *
 * This program is free software: you can redistribute it and/or modify
 * it under the terms of the GNU General Public License as published by
@@ -81,11 +81,13 @@ void ContentsWidget::showEvent(QShowEvent *event)
 
 		for (int i = 0; i < m_dialogs.count(); ++i)
 		{
-			if (m_dialogs.at(i))
+			ContentsDialog *dialog(m_dialogs.at(i));
+
+			if (dialog)
 			{
-				m_dialogs.at(i)->raise();
-				m_dialogs.at(i)->adjustSize();
-				m_dialogs.at(i)->move(geometry().center() - QRect({0, 0}, m_dialogs.at(i)->size()).center());
+				dialog->raise();
+				dialog->adjustSize();
+				dialog->move(geometry().center() - QRect({0, 0}, dialog->size()).center());
 			}
 		}
 	}
@@ -101,11 +103,13 @@ void ContentsWidget::resizeEvent(QResizeEvent *event)
 
 		for (int i = 0; i < m_dialogs.count(); ++i)
 		{
-			if (m_dialogs.at(i))
+			ContentsDialog *dialog(m_dialogs.at(i));
+
+			if (dialog)
 			{
-				m_dialogs.at(i)->updateSize();
-				m_dialogs.at(i)->raise();
-				m_dialogs.at(i)->move(geometry().center() - QRect({0, 0}, m_dialogs.at(i)->size()).center());
+				dialog->updateSize();
+				dialog->raise();
+				dialog->move(geometry().center() - QRect({0, 0}, dialog->size()).center());
 			}
 		}
 	}
@@ -156,8 +160,8 @@ void ContentsWidget::triggerAction(int identifier, const QVariantMap &parameters
 		case ActionsManager::PrintAction:
 			{
 				QPrinter printer;
-				printer.setCreator(QStringLiteral("Otter Browser %1").arg(Application::getFullVersion()));
-				printer.setDocName(getTitle());
+
+				setupPrinter(&printer);
 
 				QPrintDialog printDialog(&printer, this);
 				printDialog.setWindowTitle(tr("Print Page"));
@@ -172,8 +176,9 @@ void ContentsWidget::triggerAction(int identifier, const QVariantMap &parameters
 		case ActionsManager::PrintPreviewAction:
 			{
 				QPrintPreviewDialog printPreviewDialog(this);
-				printPreviewDialog.printer()->setCreator(QStringLiteral("Otter Browser %1").arg(Application::getFullVersion()));
-				printPreviewDialog.printer()->setDocName(getTitle());
+
+				setupPrinter(printPreviewDialog.printer());
+
 				printPreviewDialog.setWindowFlags(printPreviewDialog.windowFlags() | Qt::WindowMaximizeButtonHint | Qt::WindowMinimizeButtonHint);
 				printPreviewDialog.setWindowTitle(tr("Print Preview"));
 
@@ -224,13 +229,21 @@ void ContentsWidget::print(QPrinter *printer)
 	Q_UNUSED(printer)
 }
 
+void ContentsWidget::setupPrinter(QPrinter *printer)
+{
+	printer->setCreator(QStringLiteral("Otter Browser %1").arg(Application::getFullVersion()));
+	printer->setDocName(getTitle());
+}
+
 void ContentsWidget::handleAboutToClose()
 {
 	for (int i = 0; i < m_dialogs.count(); ++i)
 	{
-		if (m_dialogs.at(i))
+		ContentsDialog *dialog(m_dialogs.at(i));
+
+		if (dialog)
 		{
-			m_dialogs.at(i)->close();
+			dialog->close();
 		}
 	}
 }
@@ -273,17 +286,12 @@ void ContentsWidget::showDialog(ContentsDialog *dialog, bool lockEventLoop)
 		m_layer->raise();
 	}
 
-	connect(dialog, &ContentsDialog::finished, this, [&]()
+	connect(dialog, &ContentsDialog::finished, this, [=]()
 	{
-		ContentsDialog *dialog(qobject_cast<ContentsDialog*>(sender()));
+		m_dialogs.removeAll(dialog);
 
-		if (dialog)
-		{
-			m_dialogs.removeAll(dialog);
-
-			dialog->hide();
-			dialog->deleteLater();
-		}
+		dialog->hide();
+		dialog->deleteLater();
 
 		if (m_dialogs.isEmpty() && m_layer && m_layerTimer == 0)
 		{
@@ -568,6 +576,11 @@ void ActiveWindowObserverContentsWidget::setActiveWindow(Window *window)
 Window* ActiveWindowObserverContentsWidget::getActiveWindow() const
 {
 	return m_activeWindow;
+}
+
+QUrl ActiveWindowObserverContentsWidget::getUrl() const
+{
+	return {};
 }
 
 }

@@ -1,6 +1,6 @@
 /**************************************************************************
 * Otter Browser: Web browser controlled by the user, not vice-versa.
-* Copyright (C) 2013 - 2024 Michal Dutkiewicz aka Emdek <michal@emdek.pl>
+* Copyright (C) 2013 - 2025 Michal Dutkiewicz aka Emdek <michal@emdek.pl>
 *
 * This program is free software: you can redistribute it and/or modify
 * it under the terms of the GNU General Public License as published by
@@ -25,8 +25,13 @@
 
 #include "ui_ErrorConsoleWidget.h"
 
+#if QT_VERSION >= 0x060000
+#include <QtGui/QActionGroup>
+#endif
 #include <QtGui/QClipboard>
+#if QT_VERSION < 0x060000
 #include <QtWidgets/QActionGroup>
+#endif
 #include <QtWidgets/QMenu>
 
 namespace Otter
@@ -226,26 +231,22 @@ void ErrorConsoleWidget::filterCategories()
 		m_messageScopes = messageScopes;
 	}
 
-	const QVector<Console::MessageCategory> categories(getCategories());
-	const quint64 activeWindow(getActiveWindow());
-
-	for (int i = 0; i < m_model->rowCount(); ++i)
-	{
-		applyFilters(m_model->index(i, 0), m_ui->filterLineEditWidget->text(), categories, activeWindow);
-	}
+	applyFilters(m_ui->filterLineEditWidget->text(), getCategories(), getActiveWindow());
 }
 
 void ErrorConsoleWidget::filterMessages(const QString &filter)
 {
 	if (m_model)
 	{
-		const QVector<Console::MessageCategory> categories(getCategories());
-		const quint64 activeWindow(getActiveWindow());
+		applyFilters(filter, getCategories(), getActiveWindow());
+	}
+}
 
-		for (int i = 0; i < m_model->rowCount(); ++i)
-		{
-			applyFilters(m_model->index(i, 0), filter, categories, activeWindow);
-		}
+void ErrorConsoleWidget::applyFilters(const QString &filter, const QVector<Console::MessageCategory> &categories, quint64 activeWindow)
+{
+	for (int i = 0; i < m_model->rowCount(); ++i)
+	{
+		applyFilters(m_model->index(i, 0), filter, categories, activeWindow);
 	}
 }
 

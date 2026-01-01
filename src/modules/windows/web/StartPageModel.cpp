@@ -219,7 +219,9 @@ void StartPageModel::handleThumbnailCreated(quint64 identifier, const QPixmap &t
 			bookmark->setData(title, BookmarksModel::TitleRole);
 		}
 
-		emit isReloadingTileChanged(index(bookmark->index().row(), bookmark->index().column()));
+		const QModelIndex bookmarkIndex(bookmark->index());
+
+		emit isReloadingTileChanged(index(bookmarkIndex.row(), bookmarkIndex.column()));
 	}
 }
 
@@ -245,8 +247,10 @@ QMimeData* StartPageModel::mimeData(const QModelIndexList &indexes) const
 
 		if (index.isValid() && static_cast<BookmarksModel::BookmarkType>(index.data(BookmarksModel::TypeRole).toInt()) == BookmarksModel::UrlBookmark)
 		{
-			texts.append(index.data(BookmarksModel::UrlRole).toString());
-			urls.append(index.data(BookmarksModel::UrlRole).toUrl());
+			const QVariant data(index.data(BookmarksModel::UrlRole));
+
+			texts.append(data.toString());
+			urls.append(data.toUrl());
 		}
 	}
 

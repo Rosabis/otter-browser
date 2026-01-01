@@ -1,6 +1,6 @@
 /**************************************************************************
 * Otter Browser: Web browser controlled by the user, not vice-versa.
-* Copyright (C) 2013 - 2024 Michal Dutkiewicz aka Emdek <michal@emdek.pl>
+* Copyright (C) 2013 - 2025 Michal Dutkiewicz aka Emdek <michal@emdek.pl>
 * Copyright (C) 2014 - 2015 Piotr Wójcik <chocimier@tlen.pl>
 * Copyright (C) 2015 Jan Bajer aka bajasoft <jbajer@gmail.com>
 *
@@ -105,7 +105,9 @@ MainWindow::MainWindow(const QVariantMap &parameters, const Session::MainWindow 
 
 			for (int j = 0; j < definitions.count(); ++j)
 			{
-				states.append(Session::MainWindow::ToolBarState(definitions.at(j).identifier, ToolBarsManager::getToolBarDefinition(definitions.at(j).identifier)));
+				const int identifier(definitions.at(j).identifier);
+
+				states.append(Session::MainWindow::ToolBarState(identifier, ToolBarsManager::getToolBarDefinition(identifier)));
 			}
 
 			toolBarStates[areas.at(i)] = states;
@@ -149,14 +151,16 @@ MainWindow::MainWindow(const QVariantMap &parameters, const Session::MainWindow 
 
 		for (int j = 0; j < states.count(); ++j)
 		{
-			if (states.at(j).identifier < 0)
+			const Session::MainWindow::ToolBarState state(states.at(j));
+
+			if (state.identifier < 0)
 			{
 				continue;
 			}
 
-			ToolBarWidget *toolBar(WidgetFactory::createToolBar(states.at(j).identifier, nullptr, this));
+			ToolBarWidget *toolBar(WidgetFactory::createToolBar(state.identifier, nullptr, this));
 			toolBar->setArea(area);
-			toolBar->setState(states.at(j));
+			toolBar->setState(state);
 
 			if (row > 0)
 			{
@@ -1630,10 +1634,12 @@ void MainWindow::beginToolBarDragging(bool isSidebar)
 
 	for (int i = 0; i < 4; ++i)
 	{
-		if (!isSidebar || areas.at(i) == Qt::LeftToolBarArea || areas.at(i) == Qt::RightToolBarArea)
+		const Qt::ToolBarArea area(areas.at(i));
+
+		if (!isSidebar || area == Qt::LeftToolBarArea || area == Qt::RightToolBarArea)
 		{
-			addToolBarBreak(areas.at(i));
-			addToolBar(areas.at(i), new ToolBarDropZoneWidget(this));
+			addToolBarBreak(area);
+			addToolBar(area, new ToolBarDropZoneWidget(this));
 		}
 	}
 }
@@ -1814,7 +1820,7 @@ void MainWindow::handleToolBarAdded(int identifier)
 {
 	const ToolBarsManager::ToolBarDefinition definition(ToolBarsManager::getToolBarDefinition(identifier));
 	QVector<ToolBarWidget*> toolBars(getToolBars(definition.location));
-	ToolBarWidget *toolBar(WidgetFactory::createToolBar(identifier, nullptr, this));
+	ToolBarWidget *newToolBar(WidgetFactory::createToolBar(identifier, nullptr, this));
 
 	if (toolBars.isEmpty() || definition.row < 0)
 	{
@@ -1823,7 +1829,7 @@ void MainWindow::handleToolBarAdded(int identifier)
 			addToolBarBreak(definition.location);
 		}
 
-		addToolBar(definition.location, toolBar);
+		addToolBar(definition.location, newToolBar);
 	}
 	else
 	{
@@ -1832,7 +1838,7 @@ void MainWindow::handleToolBarAdded(int identifier)
 			removeToolBar(toolBars.at(i));
 		}
 
-		toolBars.append(toolBar);
+		toolBars.append(newToolBar);
 
 		std::sort(toolBars.begin(), toolBars.end(), [&](ToolBarWidget *first, ToolBarWidget *second)
 		{
@@ -1843,18 +1849,20 @@ void MainWindow::handleToolBarAdded(int identifier)
 
 		for (int i = 0; i < toolBars.count(); ++i)
 		{
+			ToolBarWidget *toolBar(toolBars.at(i));
+
 			if (i > 0)
 			{
 				addToolBarBreak(definition.location);
 			}
 
-			addToolBar(definition.location, toolBars.at(i));
+			addToolBar(definition.location, toolBar);
 
-			toolBars.at(i)->setVisible(toolBars.at(i)->shouldBeVisible(mode));
+			toolBar->setVisible(toolBar->shouldBeVisible(mode));
 		}
 	}
 
-	m_toolBars[identifier] = toolBar;
+	m_toolBars[identifier] = newToolBar;
 
 	SessionsManager::markSessionAsModified();
 
@@ -1926,9 +1934,11 @@ void MainWindow::updateShortcuts()
 
 		for (int j = 0; j < definition.shortcuts.count(); ++j)
 		{
-			if (ActionsManager::isShortcutAllowed(definition.shortcuts.at(j)))
+			const QKeySequence shortcut(definition.shortcuts.at(j));
+
+			if (ActionsManager::isShortcutAllowed(shortcut))
 			{
-				m_shortcuts.append(new Shortcut(definition.action, definition.shortcuts.at(j), definition.parameters, this));
+				m_shortcuts.append(new Shortcut(definition.action, shortcut, definition.parameters, this));
 			}
 		}
 	}
@@ -2086,9 +2096,11 @@ QWidget* MainWindow::findVisibleWidget(const QVector<QPointer<QWidget> > &widget
 {
 	for (int i = 0; i < widgets.count(); ++i)
 	{
-		if (widgets.at(i) && widgets.at(i)->isVisible())
+		QWidget *widget(widgets.at(i));
+
+		if (widget && widget->isVisible())
 		{
-			return widgets.at(i);
+			return widget;
 		}
 	}
 
@@ -2514,9 +2526,10 @@ Session::MainWindow MainWindow::getSession() const
 
 		for (int j = 0; j < toolBars.count(); ++j)
 		{
-			Session::MainWindow::ToolBarState state(toolBars.at(j)->getState());
+			ToolBarWidget *toolBar(toolBars.at(j));
+			Session::MainWindow::ToolBarState state(toolBar->getState());
 			state.location = areas.at(i);
-			state.identifier = toolBars.at(j)->getIdentifier();
+			state.identifier = toolBar->getIdentifier();
 			state.row = j;
 
 			session.toolBars.append(state);

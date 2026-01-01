@@ -1,6 +1,6 @@
 /**************************************************************************
 * Otter Browser: Web browser controlled by the user, not vice-versa.
-* Copyright (C) 2013 - 2024 Michal Dutkiewicz aka Emdek <michal@emdek.pl>
+* Copyright (C) 2013 - 2025 Michal Dutkiewicz aka Emdek <michal@emdek.pl>
 *
 * This program is free software: you can redistribute it and/or modify
 * it under the terms of the GNU General Public License as published by
@@ -264,7 +264,7 @@ ConfigurationContentsWidget::ConfigurationContentsWidget(const QVariantMap &para
 			m_ui->configurationViewWidget->setCurrentIndex(index.sibling(index.row(), 3));
 		}
 	});
-	connect(m_ui->configurationViewWidget, &ItemViewWidget::modified, [&]()
+	connect(m_ui->configurationViewWidget, &ItemViewWidget::modified, this, [&]()
 	{
 		m_ui->resetAllButton->setEnabled(true);
 		m_ui->saveAllButton->setEnabled(true);
@@ -282,11 +282,11 @@ ConfigurationContentsWidget::ConfigurationContentsWidget(const QVariantMap &para
 		}
 	});
 	connect(m_ui->filterLineEditWidget, &LineEditWidget::textChanged, m_ui->configurationViewWidget, &ItemViewWidget::setFilterString);
-	connect(m_ui->resetAllButton, &QPushButton::clicked, [&]()
+	connect(m_ui->resetAllButton, &QPushButton::clicked, this, [&]()
 	{
 		saveAll(true);
 	});
-	connect(m_ui->saveAllButton, &QPushButton::clicked, [&]()
+	connect(m_ui->saveAllButton, &QPushButton::clicked, this, [&]()
 	{
 		saveAll(false);
 	});
@@ -473,9 +473,7 @@ void ConfigurationContentsWidget::handleHostOptionChanged(int identifier)
 
 	for (int i = 0; i < optionAmount; ++i)
 	{
-		const QModelIndex valueIndex(m_model->index(i, 3, groupIndex));
-
-		if (valueIndex.data(IdentifierRole).toInt() == identifier)
+		if (m_model->index(i, 3, groupIndex).data(IdentifierRole).toInt() == identifier)
 		{
 			m_model->setData(m_model->index(i, 2, groupIndex), QString::number(SettingsManager::getOverridesCount(identifier)), Qt::DisplayRole);
 
@@ -562,7 +560,7 @@ QLatin1String ConfigurationContentsWidget::getType() const
 
 QUrl ConfigurationContentsWidget::getUrl() const
 {
-	return QUrl(QLatin1String("about:config"));
+	return {QLatin1String("about:config")};
 }
 
 QIcon ConfigurationContentsWidget::getIcon() const

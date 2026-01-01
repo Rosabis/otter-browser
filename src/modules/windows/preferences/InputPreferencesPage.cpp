@@ -20,7 +20,6 @@
 **************************************************************************/
 
 #include "InputPreferencesPage.h"
-#include "../../../core/GesturesManager.h"
 #include "../../../core/ItemModel.h"
 #include "../../../core/SessionsManager.h"
 #include "../../../core/ThemesManager.h"
@@ -28,6 +27,7 @@
 #include "../../../ui/ActionParametersDialog.h"
 #include "../../../ui/MetaDataDialog.h"
 
+#include <QtCore/QFile>
 #include <QtCore/QTimer>
 #include <QtWidgets/QMessageBox>
 
@@ -268,9 +268,10 @@ void InputPreferencesPage::loadKeyboardDefinitions(const QString &identifier)
 		const KeyboardProfile::Action shortcutsDefinition(definitions.at(i));
 		const ActionsManager::ActionDefinition actionDefinition(ActionsManager::getActionDefinition(shortcutsDefinition.action));
 		const QString name(ActionsManager::getActionName(shortcutsDefinition.action));
+		const QString description(actionDefinition.getText(true));
 
-		addKeyboardShortcuts(m_keyboardShortcutsModel, shortcutsDefinition.action, name, actionDefinition.getText(true), actionDefinition.defaultState.icon, shortcutsDefinition.parameters, shortcutsDefinition.shortcuts, false);
-		addKeyboardShortcuts(m_keyboardShortcutsModel, shortcutsDefinition.action, name, actionDefinition.getText(true), actionDefinition.defaultState.icon, shortcutsDefinition.parameters, shortcutsDefinition.disabledShortcuts, true);
+		addKeyboardShortcuts(shortcutsDefinition.action, name, description, actionDefinition.defaultState.icon, shortcutsDefinition.parameters, shortcutsDefinition.shortcuts, false);
+		addKeyboardShortcuts(shortcutsDefinition.action, name, description, actionDefinition.defaultState.icon, shortcutsDefinition.parameters, shortcutsDefinition.disabledShortcuts, true);
 	}
 
 	m_keyboardShortcutsModel->sort(1);
@@ -278,7 +279,7 @@ void InputPreferencesPage::loadKeyboardDefinitions(const QString &identifier)
 	m_ui->keyboardShortcutsViewWidget->setModified(profile.isModified());
 }
 
-void InputPreferencesPage::addKeyboardShortcuts(QStandardItemModel *model, int identifier, const QString &name, const QString &text, const QIcon &icon, const QVariantMap &rawParameters, const QVector<QKeySequence> &shortcuts, bool areShortcutsDisabled)
+void InputPreferencesPage::addKeyboardShortcuts(int identifier, const QString &name, const QString &text, const QIcon &icon, const QVariantMap &rawParameters, const QVector<QKeySequence> &shortcuts, bool areShortcutsDisabled)
 {
 	const QString parameters(createParamatersPreview(rawParameters, QLatin1String("\n")));
 
@@ -299,7 +300,7 @@ void InputPreferencesPage::addKeyboardShortcuts(QStandardItemModel *model, int i
 		items[3]->setData(areShortcutsDisabled, IsDisabledRole);
 		items[3]->setFlags(Qt::ItemIsSelectable | Qt::ItemIsEnabled | Qt::ItemIsEditable | Qt::ItemNeverHasChildren);
 
-		model->appendRow(items);
+		m_keyboardShortcutsModel->appendRow(items);
 
 		if (areShortcutsDisabled)
 		{

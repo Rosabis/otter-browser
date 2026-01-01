@@ -1,6 +1,6 @@
 /**************************************************************************
 * Otter Browser: Web browser controlled by the user, not vice-versa.
-* Copyright (C) 2013 - 2023 Michal Dutkiewicz aka Emdek <michal@emdek.pl>
+* Copyright (C) 2013 - 2025 Michal Dutkiewicz aka Emdek <michal@emdek.pl>
 * Copyright (C) 2016 - 2017 Jan Bajer aka bajasoft <jbajer@gmail.com>
 * Copyright (C) 2016 Piotr Wójcik <chocimier@tlen.pl>
 *
@@ -28,9 +28,6 @@
 #include "../../../core/Utils.h"
 
 #include <QtCore/QDir>
-#include <QtCore/QFileInfo>
-#include <QtCore/QMimeDatabase>
-#include <QtWidgets/QFileIconProvider>
 
 namespace Otter
 {
@@ -113,8 +110,9 @@ void AddressCompletionModel::updateModel()
 
 		for (int i = 0; i < bookmarks.count(); ++i)
 		{
-			CompletionEntry completionEntry(bookmarks.at(i).bookmark->getUrl(), bookmarks.at(i).bookmark->getTitle(), bookmarks.at(i).match, bookmarks.at(i).bookmark->getIcon(), {}, CompletionEntry::BookmarkType);
-			completionEntry.keyword = bookmarks.at(i).bookmark->getKeyword();
+			const BookmarksModel::BookmarkMatch bookmark(bookmarks.at(i));
+			CompletionEntry completionEntry(bookmark.bookmark->getUrl(), bookmark.bookmark->getTitle(), bookmark.match, bookmark.bookmark->getIcon(), {}, CompletionEntry::BookmarkType);
+			completionEntry.keyword = bookmark.bookmark->getKeyword();
 
 			if (completionEntry.keyword.startsWith(m_filter))
 			{
@@ -129,16 +127,16 @@ void AddressCompletionModel::updateModel()
 	{
 		const QString directory((m_filter == QString(QLatin1Char('~'))) ? QDir::homePath() : m_filter.section(QDir::separator(), 0, -2) + QDir::separator());
 		const QString prefix(m_filter.contains(QDir::separator()) ? m_filter.section(QDir::separator(), -1, -1) : QString());
-		const QList<QFileInfo> entries(QDir(Utils::normalizePath(directory)).entryInfoList(QDir::AllEntries | QDir::NoDotAndDotDot));
-		const QFileIconProvider iconProvider;
-		const QMimeDatabase mimeDatabase;
+		const QStringList entries(QDir(Utils::normalizePath(directory)).entryList(QDir::AllEntries | QDir::NoDotAndDotDot));
 		bool headerWasAdded(!m_showCompletionCategories);
 
 		for (int i = 0; i < entries.count(); ++i)
 		{
-			if (entries.at(i).fileName().startsWith(prefix, Qt::CaseInsensitive))
+			const QString entry(entries.at(i));
+
+			if (entry.startsWith(prefix, Qt::CaseInsensitive))
 			{
-				const QString path(directory + entries.at(i).fileName());
+				const QString path(directory + entry);
 
 				if (!headerWasAdded)
 				{
@@ -147,7 +145,7 @@ void AddressCompletionModel::updateModel()
 					headerWasAdded = true;
 				}
 
-				completions.append(CompletionEntry(QUrl::fromLocalFile(QDir::toNativeSeparators(path)), path, path, QIcon::fromTheme(mimeDatabase.mimeTypeForFile(entries.at(i), QMimeDatabase::MatchExtension).iconName(), iconProvider.icon(entries.at(i))), {}, CompletionEntry::LocalPathType));
+				completions.append(CompletionEntry(QUrl::fromLocalFile(QDir::toNativeSeparators(path)), path, path, ThemesManager::getFileTypeIcon(path), {}, CompletionEntry::LocalPathType));
 			}
 		}
 	}
@@ -163,7 +161,10 @@ void AddressCompletionModel::updateModel()
 
 		for (int i = 0; i < entries.count(); ++i)
 		{
-			completions.append(CompletionEntry(entries.at(i).entry->getUrl(), entries.at(i).entry->getTitle(), entries.at(i).match, entries.at(i).entry->getIcon(), entries.at(i).entry->getTimeVisited(), (entries.at(i).isTypedIn ? CompletionEntry::TypedHistoryType : CompletionEntry::HistoryType)));
+			const HistoryModel::HistoryEntryMatch match(entries.at(i));
+			HistoryModel::Entry *entry(match.entry);
+
+			completions.append(CompletionEntry(entry->getUrl(), entry->getTitle(), match.match, entry->getIcon(), entry->getTimeVisited(), (match.isTypedIn ? CompletionEntry::TypedHistoryType : CompletionEntry::HistoryType)));
 		}
 	}
 
@@ -178,7 +179,10 @@ void AddressCompletionModel::updateModel()
 
 		for (int i = 0; i < entries.count(); ++i)
 		{
-			completions.append(CompletionEntry(entries.at(i).entry->getUrl(), entries.at(i).entry->getTitle(), entries.at(i).match, entries.at(i).entry->getIcon(), entries.at(i).entry->getTimeVisited(), CompletionEntry::TypedHistoryType, entries.at(i).entry->getIdentifier()));
+			const HistoryModel::HistoryEntryMatch match(entries.at(i));
+			HistoryModel::Entry *entry(match.entry);
+
+			completions.append(CompletionEntry(entry->getUrl(), entry->getTitle(), match.match, entry->getIcon(), entry->getTimeVisited(), CompletionEntry::TypedHistoryType, entry->getIdentifier()));
 		}
 	}
 
@@ -271,28 +275,30 @@ QVariant AddressCompletionModel::data(const QModelIndex &index, int role) const
 		return {};
 	}
 
+	const CompletionEntry entry(m_completions.at(index.row()));
+
 	switch (role)
 	{
 		case Qt::DecorationRole:
-			return m_completions.at(index.row()).icon;
+			return entry.icon;
 		case HistoryIdentifierRole:
-			return (m_completions.at(index.row()).historyIdentifier);
+			return entry.historyIdentifier;
 		case IsRemovableRole:
-			return (m_completions.at(index.row()).type == CompletionEntry::TypedHistoryType);
+			return (entry.type == CompletionEntry::TypedHistoryType);
 		case TextRole:
-			return (m_completions.at(index.row()).text.isEmpty() ? m_completions.at(index.row()).url.toString() : m_completions.at(index.row()).text);
+			return (entry.text.isEmpty() ? entry.url.toString() : entry.text);
 		case UrlRole:
-			return m_completions.at(index.row()).url;
+			return entry.url;
 		case TitleRole:
-			return m_completions.at(index.row()).title;
+			return entry.title;
 		case KeywordRole:
-			return m_completions.at(index.row()).keyword;
+			return entry.keyword;
 		case MatchRole:
-			return (m_completions.at(index.row()).match.isEmpty() ? m_completions.at(index.row()).url.toString() : m_completions.at(index.row()).match);
+			return (entry.match.isEmpty() ? entry.url.toString() : entry.match);
 		case TimeVisitedRole:
-			return m_completions.at(index.row()).timeVisited;
+			return entry.timeVisited;
 		case TypeRole:
-			return static_cast<int>(m_completions.at(index.row()).type);
+			return static_cast<int>(entry.type);
 		default:
 			return {};
 	}

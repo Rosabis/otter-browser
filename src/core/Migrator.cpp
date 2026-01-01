@@ -1,6 +1,6 @@
 /**************************************************************************
 * Otter Browser: Web browser controlled by the user, not vice-versa.
-* Copyright (C) 2017 - 2024 Michal Dutkiewicz aka Emdek <michal@emdek.pl>
+* Copyright (C) 2017 - 2025 Michal Dutkiewicz aka Emdek <michal@emdek.pl>
 * Copyright (C) 2017 Piotr Wójcik <chocimier@tlen.pl>
 *
 * This program is free software: you can redistribute it and/or modify
@@ -50,7 +50,7 @@ void Migration::migrate() const
 QString Migration::createBackupPath(const QString &sourcePath)
 {
 	QString backupPath(SessionsManager::getWritableDataPath(QLatin1String("backups") + QDir::separator() + (sourcePath.isEmpty() ? QLatin1String("other") : sourcePath)) + QDir::separator());
-	QString backupName(QDate::currentDate().toString(QLatin1String("yyyyMMdd")));
+	const QString backupName(QDate::currentDate().toString(QLatin1String("yyyyMMdd")));
 	int i(1);
 
 	do
@@ -139,10 +139,11 @@ bool Migrator::run()
 
 	for (int i = 0; i < possibleMigrations.count(); ++i)
 	{
-		QStandardItem *item(new QStandardItem(QCoreApplication::translate("migrations", possibleMigrations.at(i)->getTitle().toUtf8().constData())));
+		Migration *possibleMigration(possibleMigrations.at(i));
+		QStandardItem *item(new QStandardItem(QCoreApplication::translate("migrations", possibleMigration->getTitle().toUtf8().constData())));
 		item->setFlags(Qt::ItemIsEnabled | Qt::ItemNeverHasChildren | Qt::ItemIsSelectable);
 
-		if (possibleMigrations.at(i)->needsBackup())
+		if (possibleMigration->needsBackup())
 		{
 			needsBackup = true;
 		}
@@ -161,7 +162,7 @@ bool Migrator::run()
 
 	QDialogButtonBox::StandardButton clickedButton(QDialogButtonBox::Yes);
 
-	QObject::connect(buttonBox, &QDialogButtonBox::clicked, [&](QAbstractButton *button)
+	QObject::connect(buttonBox, &QDialogButtonBox::clicked, &dialog, [&](QAbstractButton *button)
 	{
 		clickedButton = buttonBox->standardButton(button);
 

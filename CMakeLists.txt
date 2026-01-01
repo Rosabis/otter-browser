@@ -62,15 +62,16 @@ set(CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
 set(CMAKE_AUTOMOC ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
-set(CMAKE_CXX_STANDARD 11)
+set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 include(FeatureSummary)
 include(GNUInstallDirs)
 
+option(ALLOW_WITHOUT_WEB_BACKENDS "Allow to build without any web backends (build testing only)" OFF)
 option(ENABLE_QTWEBENGINE "Enable QtWebEngine backend (requires QtWebEngine 5.15)" ON)
 option(ENABLE_QTWEBKIT "Enable QtWebKit backend (requires QtWebKit 5.212)" ON)
-option(ENABLE_CRASHREPORTS "Enable built-in crash reporting (only for official builds)" OFF)
+option(ENABLE_CRASH_REPORTS "Enable built-in crash reporting (official builds only)" OFF)
 option(ENABLE_DBUS "Enable D-Bus based integration for notifications (only freedesktop.org compatible platforms)" ON)
 option(ENABLE_SPELLCHECK "Enable Hunspell based spell checking" ON)
 
@@ -384,8 +385,8 @@ if (ENABLE_QTWEBKIT)
 	include(src/modules/backends/web/qtwebkit/CMakeLists.txt)
 endif ()
 
-if (ENABLE_CRASHREPORTS)
-	add_definitions(-DOTTER_ENABLE_CRASHREPORTS)
+if (ENABLE_CRASH_REPORTS)
+	add_definitions(-DOTTER_ENABLE_CRASH_REPORTS)
 	include_directories(${CMAKE_SOURCE_DIR}/3rdparty/breakpad/src/)
 
 	if (WIN32)
@@ -478,7 +479,7 @@ elseif (APPLE)
 	set(MACOSX_BUNDLE_SHORT_VERSION_STRING ${MAJOR_VERSION}.${MINOR_VERSION})
 	set(MACOSX_BUNDLE_ICON_FILE otter-browser.icns)
 	set(MACOSX_BUNDLE_GUI_IDENTIFIER "org.otter-browser.otter-browser")
-	set(MACOSX_BUNDLE_COPYRIGHT "Copyright (C) 2013-2024 Otter Browser Team. All rights reserved.")
+	set(MACOSX_BUNDLE_COPYRIGHT "Copyright (C) 2013-2025 Otter Browser Team. All rights reserved.")
 	set(OTTER_SOURCES
 		${OTTER_SOURCES}
 		src/modules/platforms/mac/MacPlatformIntegration.mm
@@ -510,7 +511,13 @@ feature_summary(WHAT ALL INCLUDE_QUIET_PACKAGES FATAL_ON_MISSING_REQUIRED_PACKAG
 list(LENGTH OTTER_BACKENDS_WEB OTTER_BACKENDS_WEB_LENGTH)
 
 if (${OTTER_BACKENDS_WEB_LENGTH} EQUAL 0)
-	message(SEND_ERROR "No web backends available!")
+	if (ALLOW_WITHOUT_WEB_BACKENDS)
+		add_definitions(-DOTTER_NO_WEB_BACKENDS)
+
+		message(WARNING "No web backends available!")
+	else ()
+		message(SEND_ERROR "No web backends available!")
+	endif ()
 else ()
 	set(OTTER_BACKENDS_WEB_SUMMARY "The following web backends will be built:\n\n")
 
@@ -576,7 +583,7 @@ elseif (UNIX)
 		target_link_libraries(otter-browser Qt5::DBus)
 	endif ()
 
-	if (ENABLE_CRASHREPORTS)
+	if (ENABLE_CRASH_REPORTS)
 		target_link_libraries(otter-browser -lpthread)
 	endif ()
 endif ()

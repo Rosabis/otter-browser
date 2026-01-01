@@ -1,6 +1,6 @@
 /**************************************************************************
 * Otter Browser: Web browser controlled by the user, not vice-versa.
-* Copyright (C) 2013 - 2024 Michal Dutkiewicz aka Emdek <michal@emdek.pl>
+* Copyright (C) 2013 - 2025 Michal Dutkiewicz aka Emdek <michal@emdek.pl>
 * Copyright (C) 2014 - 2016 Piotr Wójcik <chocimier@tlen.pl>
 * Copyright (C) 2016 Jan Bajer aka bajasoft <jbajer@gmail.com>
 *
@@ -94,7 +94,7 @@ void SettingsManager::createInstance(const QString &path)
 	registerOption(Browser_RememberPasswordsOption, BooleanType, false);
 	registerOption(Browser_ReuseCurrentTabOption, BooleanType, false);
 	registerOption(Browser_ShowSelectionContextMenuOnDoubleClickOption, BooleanType, false);
-	registerOption(Browser_SpellCheckDictionaryOption, StringType, QString());
+	registerOption(Browser_SpellCheckDictionaryOption, ListType, QStringList());
 	registerOption(Browser_SpellCheckIgnoreDctionariesOption, StringType, QStringList());
 	registerOption(Browser_StartupBehaviorOption, EnumerationType, QLatin1String("continuePrevious"), {QLatin1String("continuePrevious"), QLatin1String("showDialog"), QLatin1String("startHomePage"), QLatin1String("startStartPage"), QLatin1String("startEmpty")});
 	registerOption(Browser_TransferStartingActionOption, EnumerationType, QLatin1String("doNothing"), {QLatin1String("openTab"), QLatin1String("openBackgroundTab"), QLatin1String("openPanel"), QLatin1String("doNothing")});
@@ -286,13 +286,15 @@ void SettingsManager::removeOverride(const QString &host, int identifier)
 
 	for (int i = 0; i < groups.count(); ++i)
 	{
-		settings.beginGroup(groups.at(i));
+		const QString group(groups.at(i));
+
+		settings.beginGroup(group);
 
 		const QStringList rawOptions(settings.childKeys());
 
 		for (int j = 0; j < rawOptions.count(); ++j)
 		{
-			const int option(getOptionIdentifier(groups.at(i) + QLatin1Char('/') + rawOptions.at(j)));
+			const int option(getOptionIdentifier(group + QLatin1Char('/') + rawOptions.at(j)));
 
 			if (option >= 0)
 			{
@@ -531,9 +533,11 @@ QStringList SettingsManager::getOverrideHosts(int identifier)
 
 	for (int i = 0; i < overridesGroups.count(); ++i)
 	{
-		if (overrides.contains(overridesGroups.at(i) + QLatin1Char('/') + optionName))
+		const QString group(overridesGroups.at(i));
+
+		if (overrides.contains(group + QLatin1Char('/') + optionName))
 		{
-			hosts.append(overridesGroups.at(i));
+			hosts.append(group);
 		}
 	}
 

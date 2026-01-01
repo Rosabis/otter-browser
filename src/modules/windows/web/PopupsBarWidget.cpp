@@ -1,7 +1,7 @@
 /**************************************************************************
 * Otter Browser: Web browser controlled by the user, not vice-versa.
 * Copyright (C) 2015 Jan Bajer aka bajasoft <jbajer@gmail.com>
-* Copyright (C) 2015 - 2024 Michal Dutkiewicz aka Emdek <michal@emdek.pl>
+* Copyright (C) 2015 - 2025 Michal Dutkiewicz aka Emdek <michal@emdek.pl>
 *
 * This program is free software: you can redistribute it and/or modify
 * it under the terms of the GNU General Public License as published by
@@ -104,7 +104,7 @@ void PopupsBarWidget::populateMenu()
 		m_actionGroup = new QActionGroup(menu);
 		m_actionGroup->setExclusive(true);
 
-		connect(m_actionGroup, &QActionGroup::triggered, [&](QAction *action)
+		connect(m_actionGroup, &QActionGroup::triggered, this, [&](QAction *action)
 		{
 			if (action)
 			{

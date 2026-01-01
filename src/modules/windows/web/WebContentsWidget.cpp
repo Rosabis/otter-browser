@@ -1,6 +1,6 @@
 /**************************************************************************
 * Otter Browser: Web browser controlled by the user, not vice-versa.
-* Copyright (C) 2013 - 2024 Michal Dutkiewicz aka Emdek <michal@emdek.pl>
+* Copyright (C) 2013 - 2025 Michal Dutkiewicz aka Emdek <michal@emdek.pl>
 * Copyright (C) 2015 Jan Bajer aka bajasoft <jbajer@gmail.com>
 * Copyright (C) 2017 Piotr Wójcik <chocimier@tlen.pl>
 *
@@ -57,7 +57,7 @@ namespace Otter
 {
 
 QString WebContentsWidget::m_sharedQuickFindQuery = nullptr;
-QMap<WebContentsWidget::ScrollDirections, QPixmap> WebContentsWidget::m_scrollCursors;
+QMap<WebContentsWidget::ScrollDirections, QCursor> WebContentsWidget::m_scrollCursors;
 
 WebContentsWidget::WebContentsWidget(const QVariantMap &parameters, const QHash<int, QVariant> &options, WebWidget *widget, Window *window, QWidget *parent) : ContentsWidget(parameters, window, parent),
 	m_websiteInformationDialog(nullptr),
@@ -165,7 +165,7 @@ void WebContentsWidget::timerEvent(QTimerEvent *event)
 				}
 			}
 
-			m_scrollCursors[directions] = QPixmap(QLatin1String(":/cursors/scroll-") + mappedDirections.join(QLatin1Char('-')) + QLatin1String(".png"));
+			m_scrollCursors[directions] = QCursor(QPixmap(QLatin1String(":/cursors/scroll-") + mappedDirections.join(QLatin1Char('-')) + QLatin1String(".png")));
 		}
 
 		scrollContents(scrollDelta);
@@ -314,7 +314,7 @@ void WebContentsWidget::search(const QString &search, const QString &query)
 {
 	if (m_webWidget->getUrl().scheme() == QLatin1String("view-source"))
 	{
-		setWidget(nullptr, {{QLatin1String("hints"), (isPrivate() ? SessionsManager::PrivateOpen : SessionsManager::DefaultOpen)}}, (m_webWidget ? m_webWidget->getOptions() : QHash<int, QVariant>()));
+		setWidget(nullptr, {{QLatin1String("hints"), (isPrivate() ? SessionsManager::PrivateOpen : SessionsManager::DefaultOpen)}}, m_webWidget->getOptions());
 	}
 
 	m_webWidget->search(search, query);
@@ -712,7 +712,7 @@ void WebContentsWidget::findInPage(WebWidget::FindFlags flags)
 		m_quickFindTimer = startTimer(2000);
 	}
 
-	m_quickFindQuery = (m_searchBarWidget ? m_searchBarWidget->getQuery() : m_sharedQuickFindQuery);
+	m_quickFindQuery = ((m_searchBarWidget && m_searchBarWidget->hasQuery()) ? m_searchBarWidget->getQuery() : m_sharedQuickFindQuery);
 
 	m_webWidget->findInPage(m_quickFindQuery, flags);
 
@@ -889,7 +889,9 @@ void WebContentsWidget::handleSavePasswordRequest(const PasswordsManager::Passwo
 
 	for (int i = 0; i < password.fields.count(); ++i)
 	{
-		if (password.fields.at(i).type == PasswordsManager::PasswordField && !password.fields.at(i).value.isEmpty())
+		const PasswordsManager::PasswordInformation::Field field(password.fields.at(i));
+
+		if (field.type == PasswordsManager::PasswordField && !field.value.isEmpty())
 		{
 			isValid = true;
 
@@ -1077,7 +1079,7 @@ void WebContentsWidget::setScrollMode(ScrollMode mode)
 
 			if (!m_scrollCursors.contains(NoDirection))
 			{
-				m_scrollCursors[NoDirection] = QPixmap(QLatin1String(":/cursors/scroll-vertical.png"));
+				m_scrollCursors[NoDirection] = QCursor(QPixmap(QLatin1String(":/cursors/scroll-vertical.png")));
 			}
 
 			if (m_scrollTimer == 0)
@@ -1261,14 +1263,19 @@ void WebContentsWidget::setOption(int identifier, const QVariant &value)
 
 void WebContentsWidget::setHistory(const Session::Window::History &history)
 {
-	if (history.entries.count() == 1 && QUrl(history.entries.at(0).url).scheme() == QLatin1String("view-source"))
+	if (history.entries.count() == 1)
 	{
-		setUrl(QUrl(history.entries.at(0).url), true);
+		const QUrl url(history.entries.at(0).url);
+
+		if (url.scheme() == QLatin1String("view-source"))
+		{
+			setUrl(url, true);
+
+			return;
+		}
 	}
-	else
-	{
-		m_webWidget->setHistory(history);
-	}
+
+	m_webWidget->setHistory(history);
 }
 
 void WebContentsWidget::setZoom(int zoom)
@@ -1278,7 +1285,7 @@ void WebContentsWidget::setZoom(int zoom)
 
 void WebContentsWidget::setUrl(const QUrl &url, bool isTypedIn)
 {
-	const QHash<int, QVariant> options(m_webWidget ? m_webWidget->getOptions() : QHash<int, QVariant>());
+	const QHash<int, QVariant> options( m_webWidget->getOptions());
 	const QVariantMap parameters({{QLatin1String("hints"), (isPrivate() ? SessionsManager::PrivateOpen : SessionsManager::DefaultOpen)}});
 
 	if (url.scheme() == QLatin1String("view-source") && m_webWidget->getUrl().scheme() != QLatin1String("view-source"))

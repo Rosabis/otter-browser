@@ -1,7 +1,7 @@
 /**************************************************************************
 * Otter Browser: Web browser controlled by the user, not vice-versa.
 * Copyright (C) 2014 - 2017 Jan Bajer aka bajasoft <jbajer@gmail.com>
-* Copyright (C) 2015 - 2024 Michal Dutkiewicz aka Emdek <michal@emdek.pl>
+* Copyright (C) 2015 - 2025 Michal Dutkiewicz aka Emdek <michal@emdek.pl>
 *
 * This program is free software: you can redistribute it and/or modify
 * it under the terms of the GNU General Public License as published by
@@ -23,13 +23,13 @@
 #include "Application.h"
 #include "Console.h"
 #include "JsonSettings.h"
-#include "SettingsManager.h"
 #include "SessionsManager.h"
 
 #include <QtCore/QDir>
 #include <QtCore/QJsonArray>
 #include <QtCore/QJsonObject>
 #include <QtCore/QTimer>
+#include <QtCore/QTimeZone>
 
 namespace Otter
 {
@@ -63,7 +63,7 @@ void ContentFiltersManager::initialize()
 	}
 
 	const QList<QFileInfo> existingProfiles(QDir(SessionsManager::getWritableDataPath(QLatin1String("contentBlocking"))).entryInfoList({QLatin1String("*.txt")}, QDir::Files));
-	QJsonObject bundledMainObject(JsonSettings(SessionsManager::getReadableDataPath(QLatin1String("contentBlocking.json"), true)).object());
+	const QJsonObject bundledMainObject(JsonSettings(SessionsManager::getReadableDataPath(QLatin1String("contentBlocking.json"), true)).object());
 	QStringList profiles;
 	profiles.reserve(existingProfiles.count());
 
@@ -93,7 +93,7 @@ void ContentFiltersManager::initialize()
 
 	m_contentBlockingProfiles.reserve(profiles.count());
 
-	QJsonObject localMainObject(JsonSettings(SessionsManager::getWritableDataPath(QLatin1String("contentBlocking.json"))).object());
+	const QJsonObject localMainObject(JsonSettings(SessionsManager::getWritableDataPath(QLatin1String("contentBlocking.json"))).object());
 	const QHash<QString, ContentFiltersProfile::ProfileCategory> categoryTitles({{QLatin1String("advertisements"), ContentFiltersProfile::AdvertisementsCategory}, {QLatin1String("annoyance"), ContentFiltersProfile::AnnoyanceCategory}, {QLatin1String("privacy"), ContentFiltersProfile::PrivacyCategory}, {QLatin1String("social"), ContentFiltersProfile::SocialCategory}, {QLatin1String("regional"), ContentFiltersProfile::RegionalCategory}, {QLatin1String("other"), ContentFiltersProfile::OtherCategory}});
 
 	for (int i = 0; i < profiles.count(); ++i)
@@ -153,7 +153,7 @@ void ContentFiltersManager::initialize()
 		}
 
 		profileSummary.lastUpdate = QDateTime::fromString(profileObject.value(QLatin1String("lastUpdate")).toString(), Qt::ISODate);
-		profileSummary.lastUpdate.setTimeSpec(Qt::UTC);
+		profileSummary.lastUpdate.setTimeZone(QTimeZone::utc());
 		profileSummary.category = categoryTitles.value(profileObject.value(QLatin1String("category")).toString());
 		profileSummary.updateInterval = profileObject.value(QLatin1String("updateInterval")).toInt();
 		profileSummary.areWildcardsEnabled = profileObject.value(QLatin1String("areWildcardsEnabled")).toBool();
@@ -301,11 +301,14 @@ void ContentFiltersManager::addProfile(ContentFiltersProfile *profile)
 
 	for (int i = 0; i < m_contentBlockingProfiles.count(); ++i)
 	{
-		if (m_contentBlockingProfiles.at(i)->getName() == profile->getName())
+		ContentFiltersProfile *currentProfile(m_contentBlockingProfiles.at(i));
+
+		if (currentProfile->getName() == profile->getName())
 		{
 			isReplacing = true;
 
-			m_contentBlockingProfiles.at(i)->deleteLater();
+			currentProfile->deleteLater();
+
 			m_contentBlockingProfiles.replace(i, profile);
 
 			break;
@@ -464,6 +467,7 @@ ContentFiltersManager::CosmeticFiltersResult ContentFiltersManager::getCosmeticF
 
 	CosmeticFiltersResult result;
 	const QStringList domains(createSubdomainList(requestUrl.host()));
+	const bool isDomainOnly(mode == DomainOnlyFilters);
 
 	for (int i = 0; i < profiles.count(); ++i)
 	{
@@ -471,7 +475,7 @@ ContentFiltersManager::CosmeticFiltersResult ContentFiltersManager::getCosmeticF
 
 		if (index >= 0 && index < m_contentBlockingProfiles.count())
 		{
-			const CosmeticFiltersResult profileResult(m_contentBlockingProfiles.at(index)->getCosmeticFilters(domains, (mode == DomainOnlyFilters)));
+			const CosmeticFiltersResult profileResult(m_contentBlockingProfiles.at(index)->getCosmeticFilters(domains, isDomainOnly));
 
 			result.rules.append(profileResult.rules);
 			result.exceptions.append(profileResult.exceptions);
@@ -566,6 +570,13 @@ bool ContentFiltersManager::isFraud(const QUrl &url)
 
 ContentFiltersProfile::ContentFiltersProfile(QObject *parent) : QObject(parent)
 {
+}
+
+bool ContentFiltersProfile::isFraud(const QUrl &url)
+{
+	Q_UNUSED(url)
+
+	return false;
 }
 
 }

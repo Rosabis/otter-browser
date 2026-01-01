@@ -1,6 +1,6 @@
 /**************************************************************************
 * Otter Browser: Web browser controlled by the user, not vice-versa.
-* Copyright (C) 2013 - 2024 Michal Dutkiewicz aka Emdek <michal@emdek.pl>
+* Copyright (C) 2013 - 2025 Michal Dutkiewicz aka Emdek <michal@emdek.pl>
 * Copyright (C) 2014 - 2017 Jan Bajer aka bajasoft <jbajer@gmail.com>
 * Copyright (C) 2016 - 2017 Piotr Wójcik <chocimier@tlen.pl>
 *
@@ -20,10 +20,10 @@
 **************************************************************************/
 
 #include "AdvancedPreferencesPage.h"
-#include "../../../core/ActionsManager.h"
 #include "../../../core/Application.h"
 #include "../../../core/GesturesManager.h"
 #include "../../../core/HandlersManager.h"
+#include "../../../core/IniSettings.h"
 #include "../../../core/JsonSettings.h"
 #include "../../../core/NotificationsManager.h"
 #include "../../../core/SessionsManager.h"
@@ -40,7 +40,6 @@
 #include <QtCore/QJsonArray>
 #include <QtCore/QJsonObject>
 #include <QtCore/QMimeDatabase>
-#include <QtCore/QSettings>
 #include <QtMultimedia/QSoundEffect>
 #include <QtNetwork/QSslSocket>
 #include <QtNetwork/QSslCipher>
@@ -1074,10 +1073,11 @@ void AdvancedPreferencesPage::load()
 
 	for (int i = 0; i < handlers.count(); ++i)
 	{
-		QStandardItem *item(new QStandardItem(handlers.at(i).mimeType.isValid() ? handlers.at(i).mimeType.name() : QLatin1String("*")));
-		item->setData(handlers.at(i).transferMode, TransferModeRole);
-		item->setData(handlers.at(i).downloadsPath, DownloadsPathRole);
-		item->setData(handlers.at(i).openCommand, OpenCommandRole);
+		const HandlersManager::MimeTypeHandlerDefinition handler(handlers.at(i));
+		QStandardItem *item(new QStandardItem(handler.mimeType.isValid() ? handler.mimeType.name() : QLatin1String("*")));
+		item->setData(handler.transferMode, TransferModeRole);
+		item->setData(handler.downloadsPath, DownloadsPathRole);
+		item->setData(handler.openCommand, OpenCommandRole);
 		item->setFlags(Qt::ItemIsSelectable | Qt::ItemIsEnabled | Qt::ItemNeverHasChildren);
 
 		mimeTypesModel->appendRow(item);
@@ -1209,10 +1209,11 @@ void AdvancedPreferencesPage::load()
 
 	for (int i = 0; i < updateChannels.count(); ++i)
 	{
-		QStandardItem *item(new QStandardItem(updateChannels.at(i).second));
+		const QPair<QString, QString> updateChannel(updateChannels.at(i));
+		QStandardItem *item(new QStandardItem(updateChannel.second));
 		item->setCheckable(true);
-		item->setCheckState(activeUpdateChannels.contains(updateChannels.at(i).first) ? Qt::Checked : Qt::Unchecked);
-		item->setData(updateChannels.at(i).first, Qt::UserRole);
+		item->setCheckState(activeUpdateChannels.contains(updateChannel.first) ? Qt::Checked : Qt::Unchecked);
+		item->setData(updateChannel.first, Qt::UserRole);
 		item->setFlags(item->flags() | Qt::ItemNeverHasChildren);
 
 		updateChannelsModel->appendRow(item);
@@ -1357,8 +1358,7 @@ void AdvancedPreferencesPage::save()
 
 	updateNotificationsOptions();
 
-	QSettings notificationsSettings(SessionsManager::getWritableDataPath(QLatin1String("notifications.ini")), QSettings::IniFormat);
-	notificationsSettings.setIniCodec("UTF-8");
+	IniSettings notificationsSettings(SessionsManager::getWritableDataPath(QLatin1String("notifications.ini")), this);
 	notificationsSettings.clear();
 
 	for (int i = 0; i < m_ui->notificationsItemView->getRowCount(); ++i)
@@ -1391,25 +1391,22 @@ void AdvancedPreferencesPage::save()
 	SettingsManager::setOption(SettingsManager::Interface_StyleSheetOption, m_ui->appearranceStyleSheetFilePathWidget->getPath());
 	SettingsManager::setOption(SettingsManager::Browser_EnableTrayIconOption, m_ui->enableTrayIconCheckBox->isChecked());
 
-	if (m_ui->appearranceStyleSheetFilePathWidget->getPath().isEmpty())
+	QString styleSheetPath(m_ui->appearranceStyleSheetFilePathWidget->getPath());
+	QString styleSheet;
+
+	if (!styleSheetPath.isEmpty())
 	{
-		Application::getInstance()->setStyleSheet({});
-	}
-	else
-	{
-		QFile file(m_ui->appearranceStyleSheetFilePathWidget->getPath());
+		QFile file(styleSheetPath);
 
 		if (file.open(QIODevice::ReadOnly))
 		{
-			Application::getInstance()->setStyleSheet(QString::fromLatin1(file.readAll()));
+			styleSheet = QString::fromLatin1(file.readAll());
 
 			file.close();
 		}
-		else
-		{
-			Application::getInstance()->setStyleSheet({});
-		}
 	}
+
+	Application::getInstance()->setStyleSheet(styleSheet);
 
 	const QMimeDatabase mimeDatabase;
 
@@ -1426,18 +1423,18 @@ void AdvancedPreferencesPage::save()
 			continue;
 		}
 
-		HandlersManager::MimeTypeHandlerDefinition definition;
+		HandlersManager::MimeTypeHandlerDefinition hamdler;
 
 		if (index.data(Qt::DisplayRole).toString() != QLatin1String("*"))
 		{
-			definition.mimeType = mimeDatabase.mimeTypeForName(index.data(Qt::DisplayRole).toString());
+			hamdler.mimeType = mimeDatabase.mimeTypeForName(index.data(Qt::DisplayRole).toString());
 		}
 
-		definition.openCommand = index.data(OpenCommandRole).toString();
-		definition.downloadsPath = index.data(DownloadsPathRole).toString();
-		definition.transferMode = static_cast<HandlersManager::MimeTypeHandlerDefinition::TransferMode>(index.data(TransferModeRole).toInt());
+		hamdler.openCommand = index.data(OpenCommandRole).toString();
+		hamdler.downloadsPath = index.data(DownloadsPathRole).toString();
+		hamdler.transferMode = static_cast<HandlersManager::MimeTypeHandlerDefinition::TransferMode>(index.data(TransferModeRole).toInt());
 
-		HandlersManager::setMimeTypeHandler(definition.mimeType, definition);
+		HandlersManager::setMimeTypeHandler(hamdler.mimeType, hamdler);
 	}
 
 	SettingsManager::setOption(SettingsManager::Permissions_EnableJavaScriptOption, m_ui->enableJavaScriptCheckBox->isChecked());
@@ -1493,6 +1490,7 @@ void AdvancedPreferencesPage::save()
 	}
 
 	QStringList updateChannels;
+	updateChannels.reserve(m_ui->updateChannelsItemView->getRowCount());
 
 	for (int i = 0; i < m_ui->updateChannelsItemView->getRowCount(); ++i)
 	{

@@ -1,6 +1,6 @@
 /**************************************************************************
 * Otter Browser: Web browser controlled by the user, not vice-versa.
-* Copyright (C) 2013 - 2024 Michal Dutkiewicz aka Emdek <michal@emdek.pl>
+* Copyright (C) 2013 - 2025 Michal Dutkiewicz aka Emdek <michal@emdek.pl>
 *
 * This program is free software: you can redistribute it and/or modify
 * it under the terms of the GNU General Public License as published by
@@ -25,7 +25,6 @@
 #include "../core/BookmarksManager.h"
 #include "../core/Console.h"
 #include "../core/FeedsManager.h"
-#include "../core/HistoryManager.h"
 #include "../core/NetworkManagerFactory.h"
 #include "../core/NotesManager.h"
 #include "../core/SearchEnginesManager.h"
@@ -35,13 +34,13 @@
 #include "../core/ToolBarsManager.h"
 #include "../core/Utils.h"
 
+#include <QtCore/QFile>
 #include <QtCore/QJsonArray>
 #include <QtCore/QJsonDocument>
 #include <QtCore/QMetaEnum>
 #include <QtCore/QMimeDatabase>
-#include <QtCore/QTextCodec>
 #include <QtGui/QMouseEvent>
-#include <QtWidgets/QDesktopWidget>
+#include <QtGui/QScreen>
 
 namespace Otter
 {
@@ -116,7 +115,6 @@ Menu::Menu(int role, QWidget *parent) : QMenu(parent),
 		case BookmarkSelectorMenu:
 			{
 				setTitle(QT_TRANSLATE_NOOP("actions", "Bookmarks"));
-				installEventFilter(this);
 
 				const Menu *parentMenu(qobject_cast<Menu*>(parent));
 
@@ -213,7 +211,7 @@ Menu::Menu(int role, QWidget *parent) : QMenu(parent),
 
 				if (!parentMenu || parentMenu->getRole() != m_role)
 				{
-					connect(NotesManager::getModel(), &BookmarksModel::modelModified, this, &Menu::clearBookmarksMenu);
+					connect(NotesManager::getModel(), &BookmarksModel::modelModified, this, &Menu::clearNotesMenu);
 				}
 
 				connect(this, &Menu::aboutToShow, this, &Menu::populateNotesMenu);
@@ -905,8 +903,6 @@ void Menu::populateCharacterEncodingMenu()
 {
 	if (!m_actionGroup)
 	{
-		const QVector<int> textCodecs({106, 1015, 1017, 4, 5, 6, 7, 8, 82, 10, 85, 12, 13, 109, 110, 112, 2250, 2251, 2252, 2253, 2254, 2255, 2256, 2257, 2258, 18, 39, 17, 38, 2026});
-
 		m_actionGroup = new QActionGroup(this);
 		m_actionGroup->setExclusive(true);
 
@@ -919,17 +915,13 @@ void Menu::populateCharacterEncodingMenu()
 		addAction(defaultAction);
 		addSeparator();
 
-		for (int i = 0; i < textCodecs.count(); ++i)
+		const QStringList encodings(Utils::getCharacterEncodings());
+
+		for (int i = 0; i < encodings.count(); ++i)
 		{
-			const QTextCodec *codec(QTextCodec::codecForMib(textCodecs.at(i)));
-
-			if (!codec)
-			{
-				continue;
-			}
-
-			QAction *textCodecAction(addAction(Utils::elideText(QString::fromLatin1(codec->name()), fontMetrics(), this)));
-			textCodecAction->setData(codec->name().toLower());
+			const QString encoding(encodings.at(i));
+			QAction *textCodecAction(addAction(Utils::elideText(encoding, fontMetrics(), this)));
+			textCodecAction->setData(encoding.toLower());
 			textCodecAction->setCheckable(true);
 
 			m_actionGroup->addAction(textCodecAction);
@@ -1052,14 +1044,6 @@ void Menu::populateDictionariesMenu()
 {
 	clear();
 
-	if (m_actionGroup)
-	{
-		m_actionGroup->deleteLater();
-	}
-
-	m_actionGroup = new QActionGroup(this);
-	m_actionGroup->setExclusive(true);
-
 	WebWidget *webWidget(nullptr);
 
 	if (m_executor.isValid())
@@ -1076,11 +1060,7 @@ void Menu::populateDictionariesMenu()
 
 	for (int i = 0; i < dictionaries.count(); ++i)
 	{
-		Action *action(new MenuAction(ActionsManager::CheckSpellingAction, {{QLatin1String("dictionary"), dictionaries.at(i).language}}, m_executor, this));
-
-		addAction(action);
-
-		m_actionGroup->addAction(action);
+		addAction(new MenuAction(ActionsManager::CheckSpellingAction, {{QLatin1String("dictionary"), dictionaries.at(i).language}}, m_executor, this));
 	}
 }
 
@@ -1812,7 +1792,7 @@ void MenuAction::setState(const ActionsManager::ActionDefinition::State &state)
 	if (!shortcut().isEmpty())
 	{
 		const int shortcutWidth(m_menu->fontMetrics().boundingRect(QLatin1Char('X') + shortcut().toString(QKeySequence::NativeText)).width());
-		const int availableWidth(QApplication::desktop()->screenGeometry(m_menu).width() / 4);
+		const int availableWidth(m_menu->screen()->geometry().width() / 4);
 
 		if (shortcutWidth < availableWidth)
 		{

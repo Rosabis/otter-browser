@@ -1,7 +1,7 @@
 /**************************************************************************
 * Otter Browser: Web browser controlled by the user, not vice-versa.
 * Copyright (C) 2015 Piotr Wójcik <chocimier@tlen.pl>
-* Copyright (C) 2015 - 2023 Michal Dutkiewicz aka Emdek <michal@emdek.pl>
+* Copyright (C) 2015 - 2025 Michal Dutkiewicz aka Emdek <michal@emdek.pl>
 *
 * This program is free software: you can redistribute it and/or modify
 * it under the terms of the GNU General Public License as published by
@@ -36,14 +36,16 @@ ProxyModel::ProxyModel(QStandardItemModel *model, const QVector<ProxyModel::Colu
 QMimeData* ProxyModel::mimeData(const QModelIndexList &indexes) const
 {
 	QModelIndexList sourceIndexes;
+	sourceIndexes.reserve(indexes.count());
 
 	for (int i = 0; i < indexes.count(); ++i)
 	{
-		const QModelIndex index(mapToSource(indexes.at(i).sibling(indexes.at(i).row(), 0)));
+		const QModelIndex index(indexes.at(i));
+		const QModelIndex sourceIndex(mapToSource(index.sibling(index.row(), 0)));
 
-		if (!sourceIndexes.contains(index))
+		if (!sourceIndexes.contains(sourceIndex))
 		{
-			sourceIndexes.append(index);
+			sourceIndexes.append(sourceIndex);
 		}
 	}
 

@@ -1,6 +1,6 @@
 /**************************************************************************
 * Otter Browser: Web browser controlled by the user, not vice-versa.
-* Copyright (C) 2013 - 2024 Michal Dutkiewicz aka Emdek <michal@emdek.pl>
+* Copyright (C) 2013 - 2025 Michal Dutkiewicz aka Emdek <michal@emdek.pl>
 * Copyright (C) 2014 Piotr Wójcik <chocimier@tlen.pl>
 *
 * This program is free software: you can redistribute it and/or modify
@@ -35,7 +35,9 @@
 #include <QtCore/QJsonArray>
 #include <QtCore/QJsonDocument>
 #include <QtCore/QJsonObject>
+#if QT_VERSION < 0x060000
 #include <QtNetwork/QNetworkConfigurationManager>
+#endif
 #include <QtNetwork/QSslConfiguration>
 
 namespace Otter
@@ -84,7 +86,7 @@ void ProxiesModel::populateProxies(const QStringList &proxies, QStandardItem *pa
 
 		if (proxy.isFolder)
 		{
-			item->setData(proxies.at(i), IdentifierRole);
+			item->setData(identifier, IdentifierRole);
 
 			type = FolderType;
 
@@ -279,7 +281,7 @@ void NetworkManagerFactory::clearCookies(int period)
 {
 	if (!m_cookieJar)
 	{
-		m_cookieJar = new CookieJar(SessionsManager::getWritableDataPath(QLatin1String("cookies.dat")), QCoreApplication::instance());
+		m_cookieJar = new DiskCookieJar(SessionsManager::getWritableDataPath(QLatin1String("cookies.dat")), QCoreApplication::instance());
 	}
 
 	m_cookieJar->clearCookies(period);
@@ -655,7 +657,7 @@ CookieJar* NetworkManagerFactory::getCookieJar()
 {
 	if (!m_cookieJar)
 	{
-		m_cookieJar = new CookieJar(SessionsManager::getWritableDataPath(QLatin1String("cookies.dat")), QCoreApplication::instance());
+		m_cookieJar = new DiskCookieJar(SessionsManager::getWritableDataPath(QLatin1String("cookies.dat")), QCoreApplication::instance());
 	}
 
 	return m_cookieJar;
@@ -664,7 +666,7 @@ CookieJar* NetworkManagerFactory::getCookieJar()
 QNetworkReply* NetworkManagerFactory::createRequest(const QUrl &url, QNetworkAccessManager::Operation operation, bool isPrivate, QIODevice *outgoingData)
 {
 	QNetworkRequest request(url);
-	request.setAttribute(QNetworkRequest::FollowRedirectsAttribute, true);
+	request.setAttribute(QNetworkRequest::RedirectPolicyAttribute, QNetworkRequest::NoLessSafeRedirectPolicy);
 	request.setHeader(QNetworkRequest::UserAgentHeader, getUserAgent());
 
 	return getNetworkManager(isPrivate)->createRequest(operation, request, outgoingData);
@@ -686,7 +688,7 @@ QStringList NetworkManagerFactory::getProxies()
 {
 	if (!m_isInitialized)
 	{
-		m_instance->initialize();
+		initialize();
 	}
 
 	return m_proxies[QLatin1String("root")].children;
@@ -696,7 +698,7 @@ QStringList NetworkManagerFactory::getUserAgents()
 {
 	if (!m_isInitialized)
 	{
-		m_instance->initialize();
+		initialize();
 	}
 
 	return m_userAgents[QLatin1String("root")].children;
@@ -711,7 +713,7 @@ ProxyDefinition NetworkManagerFactory::getProxy(const QString &identifier)
 {
 	if (!m_isInitialized)
 	{
-		m_instance->initialize();
+		initialize();
 	}
 
 	if (identifier.isEmpty() || !m_proxies.contains(identifier))
@@ -741,7 +743,7 @@ UserAgentDefinition NetworkManagerFactory::getUserAgent(const QString &identifie
 
 	if (!m_isInitialized)
 	{
-		m_instance->initialize();
+		initialize();
 	}
 
 	if (identifier.isEmpty() || !m_userAgents.contains(identifier))

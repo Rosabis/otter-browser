@@ -1,6 +1,6 @@
 /**************************************************************************
 * Otter Browser: Web browser controlled by the user, not vice-versa.
-* Copyright (C) 2015 - 2023 Michal Dutkiewicz aka Emdek <michal@emdek.pl>
+* Copyright (C) 2015 - 2025 Michal Dutkiewicz aka Emdek <michal@emdek.pl>
 *
 * This program is free software: you can redistribute it and/or modify
 * it under the terms of the GNU General Public License as published by
@@ -20,7 +20,6 @@
 #include "NotesContentsWidget.h"
 #include "../../../core/Application.h"
 #include "../../../core/NotesManager.h"
-#include "../../../core/SettingsManager.h"
 #include "../../../core/ThemesManager.h"
 #include "../../../core/Utils.h"
 #include "../../../ui/Action.h"
@@ -29,10 +28,8 @@
 
 #include <QtGui/QClipboard>
 #include <QtGui/QMouseEvent>
-#include <QtWidgets/QDesktopWidget>
 #include <QtWidgets/QInputDialog>
 #include <QtWidgets/QMenu>
-#include <QtWidgets/QToolTip>
 
 namespace Otter
 {
@@ -334,7 +331,7 @@ QLatin1String NotesContentsWidget::getType() const
 
 QUrl NotesContentsWidget::getUrl() const
 {
-	return QUrl(QLatin1String("about:notes"));
+	return {QLatin1String("about:notes")};
 }
 
 QIcon NotesContentsWidget::getIcon() const
@@ -401,7 +398,7 @@ bool NotesContentsWidget::eventFilter(QObject *object, QEvent *event)
 	{
 		const QMouseEvent *mouseEvent(static_cast<QMouseEvent*>(event));
 
-		if ((mouseEvent->button() == Qt::LeftButton && mouseEvent->modifiers() != Qt::NoModifier) || mouseEvent->button() == Qt::MiddleButton)
+		if (mouseEvent->button() == Qt::MiddleButton || (mouseEvent->button() == Qt::LeftButton && mouseEvent->modifiers() != Qt::NoModifier))
 		{
 			const BookmarksModel::Bookmark *bookmark(NotesManager::getModel()->getBookmark(m_ui->notesViewWidget->indexAt(mouseEvent->pos())));
 
@@ -421,7 +418,7 @@ bool NotesContentsWidget::eventFilter(QObject *object, QEvent *event)
 
 		if (bookmark)
 		{
-			QToolTip::showText(helpEvent->globalPos(), QFontMetrics(QToolTip::font()).elidedText(bookmark->toolTip(), Qt::ElideRight, (QApplication::desktop()->screenGeometry(m_ui->notesViewWidget).width() / 2)), m_ui->notesViewWidget, m_ui->notesViewWidget->visualRect(index));
+			Utils::showToolTip(helpEvent->globalPos(), bookmark->toolTip(), m_ui->notesViewWidget, m_ui->notesViewWidget->visualRect(index));
 		}
 
 		return true;

@@ -82,26 +82,27 @@ void SearchEnginesManager::loadSearchEngines()
 
 	for (int i = 0; i < searchEnginesOrder.count(); ++i)
 	{
-		QFile file(SessionsManager::getReadableDataPath(QLatin1String("searchEngines/") + searchEnginesOrder.at(i) + QLatin1String(".xml")));
+		const QString identifier(searchEnginesOrder.at(i));
+		QFile file(SessionsManager::getReadableDataPath(QLatin1String("searchEngines/") + identifier + QLatin1String(".xml")));
 
 		if (!file.open(QIODevice::ReadOnly))
 		{
-			m_searchEnginesOrder.removeAll(searchEnginesOrder.at(i));
+			m_searchEnginesOrder.removeAll(identifier);
 
 			continue;
 		}
 
-		const SearchEngineDefinition searchEngine(loadSearchEngine(&file, searchEnginesOrder.at(i), true));
+		const SearchEngineDefinition searchEngine(loadSearchEngine(&file, identifier, true));
 
 		file.close();
 
 		if (searchEngine.isValid())
 		{
-			m_searchEngines[searchEnginesOrder.at(i)] = searchEngine;
+			m_searchEngines[identifier] = searchEngine;
 		}
 		else
 		{
-			m_searchEnginesOrder.removeAll(searchEnginesOrder.at(i));
+			m_searchEnginesOrder.removeAll(identifier);
 		}
 	}
 
@@ -161,9 +162,10 @@ void SearchEnginesManager::updateSearchEnginesOptions()
 
 	for (int i = 0; i < searchEngines.count(); ++i)
 	{
-		const SearchEngineDefinition searchEngine(getSearchEngine(searchEngines.at(i)));
+		const QString identifier(searchEngines.at(i));
+		const SearchEngineDefinition searchEngine(getSearchEngine(identifier));
 
-		searchEngineChoices.append({(searchEngine.title.isEmpty() ? tr("Unknown") : searchEngine.title), searchEngines.at(i), searchEngine.icon});
+		searchEngineChoices.append({(searchEngine.title.isEmpty() ? tr("Unknown") : searchEngine.title), identifier, searchEngine.icon});
 	}
 
 	SettingsManager::OptionDefinition defaultQuickSearchEngineOption(SettingsManager::getOptionDefinition(SettingsManager::Search_DefaultQuickSearchEngineOption));
@@ -204,20 +206,21 @@ SearchEnginesManager::SearchQuery SearchEnginesManager::setupQuery(const QString
 
 	for (int i = 0; i < parameters.count(); ++i)
 	{
+		const QString key(parameters.at(i).first);
 		const QString value(Utils::substitutePlaceholders(parameters.at(i).second, values));
 
 		if (searchQuery.method == QNetworkAccessManager::GetOperation)
 		{
-			getQuery.addQueryItem(parameters.at(i).first, QString::fromLatin1(QUrl::toPercentEncoding(value)));
+			getQuery.addQueryItem(key, QString::fromLatin1(QUrl::toPercentEncoding(value)));
 		}
 		else if (isUrlEncoded)
 		{
-			postQuery.addQueryItem(parameters.at(i).first, QString::fromLatin1(QUrl::toPercentEncoding(value)));
+			postQuery.addQueryItem(key, QString::fromLatin1(QUrl::toPercentEncoding(value)));
 		}
 		else if (isFormData)
 		{
 			QString encodedValue;
-			QByteArray plainValue(value.toUtf8());
+			const QByteArray plainValue(value.toUtf8());
 			const QVector<QChar> hex({QLatin1Char('0'), QLatin1Char('1'), QLatin1Char('2'), QLatin1Char('3'), QLatin1Char('4'), QLatin1Char('5'), QLatin1Char('6'), QLatin1Char('7'), QLatin1Char('8'), QLatin1Char('9'), QLatin1Char('A'), QLatin1Char('B'), QLatin1Char('C'), QLatin1Char('D'), QLatin1Char('E'), QLatin1Char('F')});
 
 			for (int j = 0; j < plainValue.length(); ++j)
@@ -237,7 +240,7 @@ SearchEnginesManager::SearchQuery SearchEnginesManager::setupQuery(const QString
 			}
 
 			searchQuery.body += QByteArrayLiteral("--AaB03x\r\ncontent-disposition: form-data; name=\"");
-			searchQuery.body += parameters.at(i).first.toUtf8();
+			searchQuery.body += key.toUtf8();
 			searchQuery.body += QByteArrayLiteral("\"\r\ncontent-type: text/plain;charset=UTF-8\r\ncontent-transfer-encoding: quoted-printable\r\n");
 			searchQuery.body += encodedValue.toUtf8();
 			searchQuery.body += QByteArrayLiteral("\r\n--AaB03x\r\n");
@@ -615,9 +618,11 @@ bool SearchEnginesManager::saveSearchEngine(const SearchEngineDefinition &search
 
 		for (int i = 0; i < parameters.count(); ++i)
 		{
+			const QPair<QString, QString> parameter(parameters.at(i));
+
 			writer.writeStartElement(QLatin1String("Param"));
-			writer.writeAttribute(QLatin1String("name"), parameters.at(i).first);
-			writer.writeAttribute(QLatin1String("value"), parameters.at(i).second);
+			writer.writeAttribute(QLatin1String("name"), parameter.first);
+			writer.writeAttribute(QLatin1String("value"), parameter.second);
 			writer.writeEndElement();
 		}
 
