@@ -48,30 +48,89 @@ jobs:
         Write-Host "Perl version:"
         perl --version
         
+    - name: 查找 Qt 安装路径
+      shell: powershell
+      id: find-qt-for-webkit
+      run: |
+        # 尝试从 action 输出获取
+        $qtDir = "${{ steps.qt.outputs.qt-dir }}"
+        Write-Host "Qt dir from action: $qtDir"
+        
+        # 如果输出为空，尝试从环境变量获取
+        if ([string]::IsNullOrEmpty($qtDir) -or $qtDir -eq "null") {
+          $qtDir = $env:QT_DIR
+          Write-Host "Qt dir from env: $qtDir"
+        }
+        
+        # 如果还是为空，尝试查找常见路径
+        if ([string]::IsNullOrEmpty($qtDir) -or $qtDir -eq "null") {
+          Write-Host "Searching for Qt installation..."
+          $possiblePaths = @(
+            "$env:ProgramFiles\Qt\5.15.2\msvc2019_64",
+            "$env:ProgramFiles(x86)\Qt\5.15.2\msvc2019_64",
+            "C:\Qt\5.15.2\msvc2019_64",
+            "D:\a\otter-browser\Qt\5.15.2\msvc2019_64"
+          )
+          foreach ($path in $possiblePaths) {
+            if (Test-Path "$path\bin\qmake.exe") {
+              $qtDir = $path
+              Write-Host "Found Qt at: $qtDir"
+              break
+            }
+          }
+        }
+        
+        if ([string]::IsNullOrEmpty($qtDir) -or $qtDir -eq "null") {
+          Write-Host "Error: Could not find Qt installation"
+          exit 1
+        }
+        
+        Write-Host "Using Qt directory: $qtDir"
+        echo "qt-dir=$qtDir" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+        
     - name: 编译 QtWebKit
       shell: powershell
-      env:
-        QT_DIR: ${{ steps.qt.outputs.qt-dir }}
       run: |
-        Write-Host "Qt directory: $env:QT_DIR"
+        $qtDir = "${{ steps.find-qt-for-webkit.outputs.qt-dir }}"
+        Write-Host "Qt directory: $qtDir"
         
         # 检查是否已安装 QtWebKit
-        $qtWebKitDll = "$env:QT_DIR\bin\Qt5WebKit.dll"
+        $qtWebKitDll = "$qtDir\bin\Qt5WebKit.dll"
         if (Test-Path $qtWebKitDll) {
           Write-Host "QtWebKit already installed, skipping compilation"
           exit 0
         }
         
-        # 克隆 QtWebKit 源代码 (使用 qtwebkit-5.212 分支)
+        # 克隆 QtWebKit 源代码
+        # 使用官方 qtwebkit 仓库，它使用不同的分支结构
         Write-Host "Cloning QtWebKit source code..."
         if (-not (Test-Path "qtwebkit")) {
-          git clone --depth 1 --branch qtwebkit-5.212 https://github.com/movableink/webkit.git qtwebkit
+          # 尝试使用官方 qtwebkit 仓库 (code.qt.io)
+          Write-Host "Trying official qtwebkit repository..."
+          git clone --depth 1 https://code.qt.io/cgit/qt/qtwebkit.git qtwebkit
+          if ($LASTEXITCODE -eq 0) {
+            Push-Location qtwebkit
+            # 尝试切换到 5.212 分支
+            Write-Host "Checking for 5.212 branch..."
+            git fetch --depth 1 origin 5.212 2>&1 | Out-Null
+            if ($LASTEXITCODE -eq 0) {
+              git checkout 5.212 2>&1 | Out-Null
+              Write-Host "Checked out 5.212 branch"
+            } else {
+              Write-Host "5.212 branch not found, checking available branches..."
+              git branch -r | Select-Object -First 10
+              Write-Host "Using default branch"
+            }
+            Pop-Location
+          } else {
+            # 如果官方仓库失败，尝试 movableink/webkit (master 分支)
+            Write-Host "Official repository failed, trying movableink/webkit..."
+            Remove-Item -Path qtwebkit -Recurse -Force -ErrorAction SilentlyContinue
+            git clone --depth 1 https://github.com/movableink/webkit.git qtwebkit
+            Write-Host "Using master branch from movableink/webkit"
+          }
         } else {
-          Write-Host "QtWebKit directory already exists, updating..."
-          Push-Location qtwebkit
-          git fetch --depth 1 origin qtwebkit-5.212
-          git checkout qtwebkit-5.212
-          Pop-Location
+          Write-Host "QtWebKit directory already exists"
         }
         
         # 创建构建目录
@@ -86,9 +145,9 @@ jobs:
           -G "Visual Studio 17 2022" `
           -A x64 `
           -DCMAKE_BUILD_TYPE=Release `
-          -DCMAKE_PREFIX_PATH="$env:QT_DIR" `
+          -DCMAKE_PREFIX_PATH="$qtDir" `
           -DPORT=Qt `
-          -DCMAKE_INSTALL_PREFIX="$env:QT_DIR" `
+          -DCMAKE_INSTALL_PREFIX="$qtDir" `
           -DENABLE_TOOLS=OFF `
           -DENABLE_API_TESTS=OFF
         
@@ -121,7 +180,7 @@ jobs:
         if (Test-Path $qtWebKitDll) {
           Write-Host "QtWebKit installation verified: $qtWebKitDll"
         } else {
-          Write-Host "Warning: QtWebKit DLL not found after installation"
+          Write-Host "Warning: QtWebKit DLL not found after installation at $qtWebKitDll"
         }
         
     - name: 配置构建目录
