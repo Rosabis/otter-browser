@@ -48,6 +48,29 @@ jobs:
         Write-Host "Perl version:"
         perl --version
         
+    - name: 安装 SQLite3
+      shell: powershell
+      id: install-sqlite3
+      run: |
+        Write-Host "Installing SQLite3 via vcpkg..."
+        # 使用 vcpkg 安装 SQLite3（最简单可靠的方法）
+        if (-not (Test-Path "vcpkg")) {
+          git clone https://github.com/Microsoft/vcpkg.git vcpkg
+        }
+        Push-Location vcpkg
+        if (-not (Test-Path "vcpkg.exe")) {
+          .\bootstrap-vcpkg.bat
+        }
+        .\vcpkg install sqlite3:x64-windows
+        Pop-Location
+        
+        # 设置 SQLite3 路径
+        $vcpkgRoot = "$PWD\vcpkg"
+        $sqlite3Root = "$vcpkgRoot\installed\x64-windows"
+        Write-Host "SQLite3 installed at: $sqlite3Root"
+        echo "sqlite3-root=$sqlite3Root" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+        echo "vcpkg-root=$vcpkgRoot" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+        
     - name: 查找 Qt 安装路径
       shell: powershell
       id: find-qt-for-webkit
@@ -92,7 +115,11 @@ jobs:
       shell: powershell
       run: |
         $qtDir = "${{ steps.find-qt-for-webkit.outputs.qt-dir }}"
+        $sqlite3Root = "${{ steps.install-sqlite3.outputs.sqlite3-root }}"
+        $vcpkgRoot = "${{ steps.install-sqlite3.outputs.vcpkg-root }}"
         Write-Host "Qt directory: $qtDir"
+        Write-Host "SQLite3 directory: $sqlite3Root"
+        Write-Host "vcpkg root: $vcpkgRoot"
         
         # 检查是否已安装 QtWebKit
         $qtWebKitDll = "$qtDir\bin\Qt5WebKit.dll"
@@ -161,11 +188,21 @@ jobs:
         $env:CMAKE_PREFIX_PATH = "$qtDir"
         $env:Qt5_DIR = "$qtDir\lib\cmake\Qt5"
         
+        # 使用 vcpkg 工具链（会自动找到 SQLite3）
+        $vcpkgToolchain = "$vcpkgRoot\scripts\buildsystems\vcpkg.cmake"
+        Write-Host "vcpkg toolchain: $vcpkgToolchain"
+        
+        if (-not (Test-Path $vcpkgToolchain)) {
+          Write-Host "Error: vcpkg toolchain not found at $vcpkgToolchain"
+          exit 1
+        }
+        
         cmake ..\qtwebkit `
           -G "Visual Studio 17 2022" `
           -A x64 `
           -DCMAKE_BUILD_TYPE=Release `
           -DCMAKE_PREFIX_PATH="$qtDir" `
+          -DCMAKE_TOOLCHAIN_FILE="$vcpkgToolchain" `
           -DPORT=Qt `
           -DCMAKE_INSTALL_PREFIX="$qtDir" `
           -DENABLE_TOOLS=OFF `
