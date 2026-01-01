@@ -20,7 +20,7 @@ jobs:
       id: qt
       with:
         version: '5.15.2'
-        modules: 'qt.qt5.5152.win64_msvc2019_64'
+        arch: 'win64_msvc2019_64'
         cache: true
         
     - name: 安装 QtWebKit (如果需要)
