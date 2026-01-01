@@ -59,14 +59,69 @@ jobs:
         New-Item -ItemType Directory -Force -Path release
         Copy-Item -Path "build\Release\otter-browser.exe" -Destination "release\" -Force
         
+    - name: 查找 Qt 安装路径
+      shell: powershell
+      id: find-qt
+      run: |
+        # 尝试从 action 输出获取
+        $qtDir = "${{ steps.qt.outputs.qt-dir }}"
+        Write-Host "Qt dir from action: $qtDir"
+        
+        # 如果输出为空，尝试从环境变量获取
+        if ([string]::IsNullOrEmpty($qtDir) -or $qtDir -eq "null") {
+          $qtDir = $env:QT_DIR
+          Write-Host "Qt dir from env: $qtDir"
+        }
+        
+        # 如果还是为空，尝试查找 windeployqt
+        if ([string]::IsNullOrEmpty($qtDir) -or $qtDir -eq "null") {
+          Write-Host "Searching for Qt installation..."
+          # 检查常见路径
+          $possiblePaths = @(
+            "$env:ProgramFiles\Qt\5.15.2\msvc2019_64",
+            "$env:ProgramFiles(x86)\Qt\5.15.2\msvc2019_64",
+            "C:\Qt\5.15.2\msvc2019_64",
+            "D:\a\otter-browser\Qt\5.15.2\msvc2019_64"
+          )
+          foreach ($path in $possiblePaths) {
+            if (Test-Path "$path\bin\windeployqt.exe") {
+              $qtDir = $path
+              Write-Host "Found Qt at: $qtDir"
+              break
+            }
+          }
+        }
+        
+        # 最后尝试在 PATH 中查找
+        if ([string]::IsNullOrEmpty($qtDir) -or $qtDir -eq "null") {
+          $windeployqt = Get-Command windeployqt.exe -ErrorAction SilentlyContinue
+          if ($windeployqt) {
+            $qtDir = Split-Path (Split-Path $windeployqt.Source)
+            Write-Host "Found Qt via PATH: $qtDir"
+          }
+        }
+        
+        if ([string]::IsNullOrEmpty($qtDir) -or $qtDir -eq "null") {
+          Write-Host "Error: Could not find Qt installation"
+          Write-Host "Checking D:\a directory..."
+          Get-ChildItem -Path "D:\a" -Recurse -Filter "windeployqt.exe" -ErrorAction SilentlyContinue | Select-Object -First 3 | ForEach-Object {
+            Write-Host "Found: $($_.FullName)"
+          }
+          exit 1
+        }
+        
+        Write-Host "Using Qt directory: $qtDir"
+        echo "qt-dir=$qtDir" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+        
     - name: 使用 windeployqt 部署 Qt 依赖
       shell: powershell
-      env:
-        QT_DIR: ${{ steps.qt.outputs.qt-dir }}
       run: |
-        $windeployqt = "$env:QT_DIR\bin\windeployqt.exe"
+        $qtDir = "${{ steps.find-qt.outputs.qt-dir }}"
+        $windeployqt = "$qtDir\bin\windeployqt.exe"
+        Write-Host "Qt directory: $qtDir"
+        Write-Host "windeployqt path: $windeployqt"
+        
         if (Test-Path $windeployqt) {
-          Write-Host "Qt directory: $env:QT_DIR"
           Write-Host "Deploying Qt dependencies..."
           
           # 部署基本 Qt 依赖（包含翻译文件，因为 QtWebEngine 可能需要）
@@ -83,8 +138,8 @@ jobs:
           # 查找并复制 QtWebEngine 的资源文件
           # QtWebEngine 资源文件可能在多个位置
           $possibleResourcePaths = @(
-            "$env:QT_DIR\resources",
-            "$env:QT_DIR\..\resources"
+            "$qtDir\resources",
+            "$qtDir\..\resources"
           )
           
           foreach ($resourcePath in $possibleResourcePaths) {
@@ -97,7 +152,7 @@ jobs:
           }
           
           # 复制 QtWebEngine 进程可执行文件
-          $qtWebEngineProcess = "$env:QT_DIR\bin\QtWebEngineProcess.exe"
+          $qtWebEngineProcess = "$qtDir\bin\QtWebEngineProcess.exe"
           if (Test-Path $qtWebEngineProcess) {
             Write-Host "Copying QtWebEngineProcess.exe"
             Copy-Item -Path $qtWebEngineProcess -Destination "release\" -Force
@@ -106,7 +161,7 @@ jobs:
           }
           
           # 确保所有 QtWebEngine DLL 文件都被复制
-          $qtBinDir = "$env:QT_DIR\bin"
+          $qtBinDir = "$qtDir\bin"
           $webEngineDlls = Get-ChildItem -Path $qtBinDir -Filter "Qt5WebEngine*.dll" -ErrorAction SilentlyContinue
           if ($webEngineDlls) {
             Write-Host "Copying QtWebEngine DLL files:"
