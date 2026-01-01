@@ -1,110 +1,133 @@
-name: CI Build
+name: Build Windows
 
 on:
-  pull_request:
-    types: [opened, synchronize, reopened]
   push:
-    branches:
-      - master
+    branches: [ main, master, develop ]
+  pull_request:
+    branches: [ main, master, develop ]
+  workflow_dispatch:
 
 jobs:
   build:
-    name: "${{matrix.os}}, ${{matrix.qt_version}}, ${{matrix.build_type}}"
-    runs-on: ${{matrix.os}}
-    strategy:
-        fail-fast: false
-        matrix:
-          include:
-            # Windows fails because libhunspell-dev is missing. See https://github.com/OtterBrowser/otter-browser/issues/1684
-            #- os: windows-latest
-            #  build_type: qtwebengine
-            #  qt_version: 5.15.2
-            # TODO: Install QtWebKit on Windows
-            #- os: windows-latest
-            #  build_type: qtwebkit
-            #  qt_version: 5.15.2
-            #- os: ubuntu-18.04
-            #  build_type: qtwebkit
-            #  qt_version: repository
-            # apt-dependencies: git build-essential cmake qtbase5-dev libqt5core5a libqt5gui5 libqt5multimedia5 qtmultimedia5-dev libqt5network5 libqt5printsupport5 libqt5qml5 qtdeclarative5-dev libqt5svg5 libqt5svg5-dev libqt5widgets5 libhunspell-dev libqt5webkit5 libqt5webkit5-dev
-            #- os: ubuntu-18.04
-            # build_type: qtwebengine
-            # qt_version: 5.15.2
-            # apt-dependencies: git build-essential cmake libhunspell-dev
-            # TODO: Figure out how to install QtWebKit without installing its dependencies from APT
-            #- os: ubuntu-18.04
-            #  build_type: qtwebkit
-            #  qt_version: 5.15.2
-            # apt-dependencies: git build-essential cmake libhunspell-dev
-            - os: ubuntu-20.04
-              build_type: qtwebkit
-              qt_version: 5.15.2
-              apt-dependencies: git build-essential cmake qtbase5-dev libqt5core5a libqt5gui5 libqt5multimedia5 qtmultimedia5-dev libqt5network5 libqt5printsupport5 libqt5qml5 qtdeclarative5-dev libqt5svg5 libqt5svg5-dev libqt5widgets5 libhunspell-dev libqt5webkit5 libqt5webkit5-dev
-            # MacOS fails because libhunspell-dev is missing. See https://github.com/OtterBrowser/otter-browser/issues/1684
-            #- os: macOS-latest
-            #  build_type: qtwebengine
-            #  qt_version: 5.15.2
-            # TODO: Install QtWebKit on MacOS
-            #- os: macOS-latest
-            #  build_type: qtwebkit
-            #  qt_version: 5.15.2
-
+    runs-on: windows-latest
+    
     steps:
-    - name: Get Otter Browser source
-      uses: actions/checkout@v1
+    - name: 检出代码
+      uses: actions/checkout@v4
+      
+    - name: 安装 Qt
+      uses: jurplel/install-qt-action@v4
+      id: qt
       with:
-        submodules: false
-        fetch-depth: 1
-
-    - name: Install Qt ${{matrix.qt_version}} with QtWebEngine
-      if: startsWith(matrix.os, 'windows') && startsWith(matrix.build_type, 'qtwebengine') || startsWith(matrix.os, 'macos') && startsWith(matrix.build_type, 'qtwebengine') || startsWith(matrix.os, 'ubuntu') && !startsWith(matrix.qt_version, 'repository') && startsWith(matrix.build_type, 'qtwebengine')
-      uses: jurplel/install-qt-action@v2
-      with:
-        version: ${{matrix.qt_version}}
-        modules: qtwebengine
-
-    - name: Install Qt ${{matrix.qt_version}} without QtWebEngine
-      if: startsWith(matrix.os, 'windows') && startsWith(matrix.build_type, 'qtwebkit') || startsWith(matrix.os, 'macos') && startsWith(matrix.build_type, 'qtwebkit') || startsWith(matrix.os, 'ubuntu') && !startsWith(matrix.qt_version, 'repository') && startsWith(matrix.build_type, 'qtwebkit')
-      uses: jurplel/install-qt-action@v2
-      with:
-        version: ${{matrix.qt_version}}
-
-    - name: Install dependencies
-      shell: bash
-      if: startsWith(matrix.os, 'ubuntu')
+        version: '5.15.2'
+        modules: 'qt.qt5.5152.win64_msvc2019_64'
+        cache: true
+        
+    - name: 安装 QtWebKit (如果需要)
+      shell: powershell
+      env:
+        QT_DIR: ${{ steps.qt.outputs.qt-dir }}
       run: |
-
-        echo "Updating apt repository index"
-        sudo apt update
-
-        echo "Installing apt packages"
-        sudo apt install -y ${{ matrix.apt-dependencies }}
-
-        # Install QtWebKit without installing Qt from the repositories.
-        #if [[ "${{ matrix.build_type }}" = "qtwebkit" && "${{ matrix.qt_version }}" != "repository" ]]; then
-        #    echo "Installing QtWebKit without its dependencies"
-        #    apt-get download libqt5webkit5 libqt5webkit5-dev
-        #    sudo dpkg --force-all -i libqt5webkit5*.deb
-        #fi
-
-    - name: Create Build Environment
-      shell: bash
-      run: cmake -E make_directory "${{runner.workspace}}/build"
-
-    - name: Configure CMake
-      working-directory: ${{runner.workspace}}/build
-      shell: bash
-      run: cmake $GITHUB_WORKSPACE
-
-    - name: Build Otter Browser
-      working-directory: ${{runner.workspace}}/build
-      shell: bash
-      run: cmake --build . --parallel 3
-
-    - name: Output system stats
-      if: ${{ always() }}
-      working-directory: ${{runner.workspace}}/build
-      shell: bash
+        # QtWebKit 需要单独安装，因为 Qt 5.6 之后已移除
+        # 如果系统已安装 QtWebKit，CMake 会自动找到
+        # 否则需要从源代码编译或使用预编译版本
+        Write-Host "注意: QtWebKit 需要单独安装。如果未安装，CMake 配置可能会失败。"
+        Write-Host "Qt 路径: $env:QT_DIR"
+        
+    - name: 安装 CMake
+      uses: jwlawson/actions-setup-cmake@v1.14
+      with:
+        cmake-version: '3.27'
+        
+    - name: 配置构建目录
+      shell: powershell
       run: |
-        echo "Disk usage:"
-        df -h
+        New-Item -ItemType Directory -Force -Path build
+        
+    - name: 配置 CMake
+      shell: powershell
+      working-directory: build
+      env:
+        QT_DIR: ${{ steps.qt.outputs.qt-dir }}
+      run: |
+        cmake .. `
+          -DCMAKE_BUILD_TYPE=Release `
+          -DCMAKE_PREFIX_PATH="$env:QT_DIR" `
+          -DENABLE_QTWEBENGINE=OFF `
+          -DENABLE_QTWEBKIT=ON `
+          -DENABLE_SPELLCHECK=OFF
+          
+    - name: 编译项目
+      shell: powershell
+      working-directory: build
+      run: |
+        cmake --build . --config Release --parallel
+        
+    - name: 创建发布目录
+      shell: powershell
+      run: |
+        New-Item -ItemType Directory -Force -Path release
+        Copy-Item -Path "build\Release\otter-browser.exe" -Destination "release\" -Force
+        
+    - name: 使用 windeployqt 部署 Qt 依赖
+      shell: powershell
+      env:
+        QT_DIR: ${{ steps.qt.outputs.qt-dir }}
+      run: |
+        $windeployqt = "$env:QT_DIR\bin\windeployqt.exe"
+        if (Test-Path $windeployqt) {
+          & $windeployqt `
+            --release `
+            --qmldir "$PWD" `
+            --no-translations `
+            --no-opengl-sw `
+            --no-system-d3d-compiler `
+            --no-compiler-runtime `
+            "release\otter-browser.exe"
+        } else {
+          Write-Host "windeployqt not found at $windeployqt, skipping..."
+        }
+        
+    - name: 复制翻译文件
+      shell: powershell
+      run: |
+        if (Test-Path "resources\translations") {
+          New-Item -ItemType Directory -Force -Path "release\locale" -ErrorAction SilentlyContinue
+          Copy-Item -Path "resources\translations\*.qm" -Destination "release\locale\" -Force
+        }
+        
+    - name: 读取版本号
+      shell: powershell
+      id: version
+      run: |
+        $content = Get-Content "CMakeLists.txt" -Raw
+        if ($content -match 'set\(MAJOR_VERSION "(\d+)"\)') {
+          $major = $matches[1]
+        }
+        if ($content -match 'set\(MINOR_VERSION "(\d+)"\)') {
+          $minor = $matches[1]
+        }
+        if ($content -match 'set\(PATCH_VERSION "(\d+)"\)') {
+          $patch = $matches[1]
+        }
+        $version = "$major.$minor.$patch"
+        echo "version=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+        echo "Version: $version"
+        
+    - name: 创建 ZIP 压缩包
+      shell: powershell
+      env:
+        VERSION: ${{ steps.version.outputs.version }}
+      run: |
+        $zipName = "otter-browser-win64-$env:VERSION.zip"
+        Compress-Archive -Path "release\*" -DestinationPath $zipName -Force
+        echo "Created: $zipName"
+        
+    - name: 上传 Artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: otter-browser-windows-${{ steps.version.outputs.version }}
+        path: |
+          otter-browser-win64-*.zip
+        retention-days: 30
+
