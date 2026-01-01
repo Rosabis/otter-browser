@@ -66,16 +66,66 @@ jobs:
       run: |
         $windeployqt = "$env:QT_DIR\bin\windeployqt.exe"
         if (Test-Path $windeployqt) {
+          Write-Host "Qt directory: $env:QT_DIR"
+          Write-Host "Deploying Qt dependencies..."
+          
+          # 部署基本 Qt 依赖（包含翻译文件，因为 QtWebEngine 可能需要）
           & $windeployqt `
             --release `
             --qmldir "$PWD" `
-            --no-translations `
             --no-opengl-sw `
             --no-system-d3d-compiler `
             --no-compiler-runtime `
             "release\otter-browser.exe"
+          
+          Write-Host "Checking for QtWebEngine dependencies..."
+          
+          # 查找并复制 QtWebEngine 的资源文件
+          # QtWebEngine 资源文件可能在多个位置
+          $possibleResourcePaths = @(
+            "$env:QT_DIR\resources",
+            "$env:QT_DIR\..\resources"
+          )
+          
+          foreach ($resourcePath in $possibleResourcePaths) {
+            if (Test-Path $resourcePath) {
+              Write-Host "Found resources at: $resourcePath"
+              New-Item -ItemType Directory -Force -Path "release\resources" -ErrorAction SilentlyContinue
+              Copy-Item -Path "$resourcePath\*" -Destination "release\resources\" -Recurse -Force
+              break
+            }
+          }
+          
+          # 复制 QtWebEngine 进程可执行文件
+          $qtWebEngineProcess = "$env:QT_DIR\bin\QtWebEngineProcess.exe"
+          if (Test-Path $qtWebEngineProcess) {
+            Write-Host "Copying QtWebEngineProcess.exe"
+            Copy-Item -Path $qtWebEngineProcess -Destination "release\" -Force
+          } else {
+            Write-Host "Warning: QtWebEngineProcess.exe not found at $qtWebEngineProcess"
+          }
+          
+          # 确保所有 QtWebEngine DLL 文件都被复制
+          $qtBinDir = "$env:QT_DIR\bin"
+          $webEngineDlls = Get-ChildItem -Path $qtBinDir -Filter "Qt5WebEngine*.dll" -ErrorAction SilentlyContinue
+          if ($webEngineDlls) {
+            Write-Host "Copying QtWebEngine DLL files:"
+            foreach ($dll in $webEngineDlls) {
+              Write-Host "  - $($dll.Name)"
+              Copy-Item -Path $dll.FullName -Destination "release\" -Force
+            }
+          } else {
+            Write-Host "Warning: No QtWebEngine DLL files found in $qtBinDir"
+          }
+          
+          # 列出部署后的文件以验证
+          Write-Host "`nDeployed files in release directory:"
+          Get-ChildItem -Path "release" -File | Select-Object Name | ForEach-Object { Write-Host "  - $($_.Name)" }
+          Write-Host "`nDeployed directories:"
+          Get-ChildItem -Path "release" -Directory | Select-Object Name | ForEach-Object { Write-Host "  - $($_.Name)\" }
         } else {
-          Write-Host "windeployqt not found at $windeployqt, skipping..."
+          Write-Host "Error: windeployqt not found at $windeployqt"
+          exit 1
         }
         
     - name: 复制翻译文件
