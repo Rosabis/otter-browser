@@ -28,11 +28,11 @@ jobs:
       env:
         QT_DIR: ${{ steps.qt.outputs.qt-dir }}
       run: |
-        # QtWebKit 需要单独安装，因为 Qt 5.6 之后已移除
-        # 如果系统已安装 QtWebKit，CMake 会自动找到
-        # 否则需要从源代码编译或使用预编译版本
-        Write-Host "注意: QtWebKit 需要单独安装。如果未安装，CMake 配置可能会失败。"
-        Write-Host "Qt 路径: $env:QT_DIR"
+        # QtWebKit needs to be installed separately as it was removed after Qt 5.6
+        # If QtWebKit is already installed, CMake will find it automatically
+        # Otherwise, it needs to be compiled from source or use a precompiled version
+        Write-Host "Note: QtWebKit needs to be installed separately. If not installed, CMake configuration may fail."
+        Write-Host "Qt path: $env:QT_DIR"
         
     - name: 安装 CMake
       uses: jwlawson/actions-setup-cmake@v1.14
