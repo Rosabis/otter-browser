@@ -282,7 +282,7 @@ jobs:
          )
          
          # 如果 vcpkg 工具链找不到 SQLite3，手动指定
-         if (Test-Path $sqlite3Include -and Test-Path $sqlite3Lib) {
+         if ((Test-Path $sqlite3Include) -and (Test-Path $sqlite3Lib)) {
            $cmakeArgs += "-DSQLite3_INCLUDE_DIR=$sqlite3Include"
            $cmakeArgs += "-DSQLite3_LIBRARY=$sqlite3Lib"
            Write-Host "Manually specifying SQLite3 paths:"
