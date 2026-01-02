@@ -48,9 +48,9 @@ jobs:
         Write-Host "Perl version:"
         perl --version
         
-     - name: 安装 SQLite3
-       shell: powershell
-       id: install-sqlite3
+    - name: 安装 SQLite3
+      shell: powershell
+      id: install-sqlite3
        run: |
          Write-Host "Installing SQLite3 via vcpkg..."
          # 使用 vcpkg 安装 SQLite3（最简单可靠的方法）
