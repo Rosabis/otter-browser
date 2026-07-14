@@ -1,0 +1,253 @@
+name: Windows QtWebKit
+
+on:
+  workflow_dispatch:
+    inputs:
+      qtwebkit_url:
+        description: QtWebKit 5.212 prebuilt archive URL (.7z or .zip)
+        required: false
+        type: string
+      build_qtwebkit_from_source:
+        description: Build QtWebKit from source (slow, 1-3 hours)
+        required: false
+        type: boolean
+        default: false
+  push:
+    branches:
+      - master
+      - main
+  pull_request:
+    branches:
+      - master
+      - main
+
+concurrency:
+  group: windows-qtwebkit-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build Windows QtWebKit
+    runs-on: windows-2022
+    timeout-minutes: 180
+
+    env:
+      BUILD_TYPE: Release
+      QT_VERSION: 5.15.2
+      QT_ARCH: win64_msvc2019_64
+      QTWEBKIT_URL: ${{ inputs.qtwebkit_url || vars.QTWEBKIT_URL || 'https://github.com/qtwebkit/qtwebkit/releases/download/qtwebkit-5.212.0-alpha4/qtwebkit-Windows-Windows_10-MSVC2017-Windows-Windows_10-X86_64.7z' }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup MSVC
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
+      - name: Setup Ninja
+        uses: seanmiddleditch/gha-setup-ninja@v5
+
+      - name: Install OpenSSL 1.1
+        shell: pwsh
+        run: |
+          # Qt 5.15 on Windows requires OpenSSL 1.1.x DLLs (libssl-1_1-x64.dll).
+          $opensslRoot = 'C:\OpenSSL-1.1'
+          $installer = Join-Path $env:RUNNER_TEMP 'Win64OpenSSL_Light-1_1_1w.exe'
+          Invoke-WebRequest -Uri 'https://slproweb.com/download/Win64OpenSSL_Light-1_1_1w.exe' -OutFile $installer
+          Start-Process -FilePath $installer -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', "/DIR=$opensslRoot" -Wait
+
+          $opensslBin = $null
+          foreach ($dir in @(
+            (Join-Path $opensslRoot 'bin')
+            'C:\Program Files\OpenSSL-Win64\bin'
+            'C:\Program Files\OpenSSL\bin'
+          )) {
+            if (Test-Path (Join-Path $dir 'libssl-1_1-x64.dll')) {
+              $opensslBin = $dir
+              break
+            }
+          }
+          if (-not $opensslBin) {
+            throw 'OpenSSL 1.1 DLLs were not found after installation.'
+          }
+          "OPENSSL_BIN=$opensslBin" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          Write-Host "OpenSSL 1.1 installed at $opensslBin"
+
+      - name: Setup Qt
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: ${{ env.QT_VERSION }}
+          host: windows
+          target: desktop
+          arch: ${{ env.QT_ARCH }}
+          dir: ${{ github.workspace }}\Qt
+          cache: true
+
+      - name: Prepare QtWebKit
+        shell: pwsh
+        run: |
+          # install-qt-action@v4 sets QT_ROOT_DIR to the arch prefix (e.g. .../5.15.2/msvc2019_64).
+          # Do not derive qtRoot from Qt5_DIR: in v4 it points to .../lib/cmake, so three Split-Path
+          # steps incorrectly land on the version directory instead of the arch directory.
+          $qtRoot = $env:QT_ROOT_DIR
+          if ([string]::IsNullOrWhiteSpace($qtRoot)) {
+            $qt5Dir = $env:Qt5_DIR
+            if ($qt5Dir -match '[\\/]lib[\\/]cmake[\\/]Qt5$') {
+              $qtRoot = Split-Path (Split-Path (Split-Path $qt5Dir -Parent) -Parent) -Parent
+            } elseif ($qt5Dir -match '[\\/]lib[\\/]cmake$') {
+              $qtRoot = Split-Path (Split-Path $qt5Dir -Parent) -Parent
+            } else {
+              throw "Cannot determine Qt root from Qt5_DIR=$qt5Dir"
+            }
+          }
+          if (-not (Test-Path (Join-Path $qtRoot 'bin\qmake.exe'))) {
+            throw "Qt root does not look valid (missing bin\qmake.exe): $qtRoot"
+          }
+          Write-Host "Qt root: $qtRoot"
+
+          if ('${{ inputs.build_qtwebkit_from_source }}' -eq 'true') {
+            git clone --depth 1 --branch qtwebkit-5.212 https://github.com/qtwebkit/qtwebkit.git qtwebkit-source
+            python -m pip install --upgrade pip
+            python -m pip install 'conan<2'
+            python qtwebkit-source\Tools\qt\build-qtwebkit-conan.py --compiler=msvc --qt=$qtRoot --install
+          } else {
+            $archive = Join-Path $env:RUNNER_TEMP 'qtwebkit-archive'
+            Invoke-WebRequest -Uri $env:QTWEBKIT_URL -OutFile $archive
+            if ($env:QTWEBKIT_URL -match '\.7z$') {
+              & 'C:\Program Files\7-Zip\7z.exe' x $archive "-o$qtRoot" -y | Out-Host
+            } elseif ($env:QTWEBKIT_URL -match '\.zip$') {
+              Expand-Archive -Path $archive -DestinationPath $qtRoot -Force
+            } else {
+              throw 'QTWEBKIT_URL must point to a .7z or .zip archive.'
+            }
+
+            # Some archives unpack into a single top-level directory.
+            if (-not (Test-Path (Join-Path $qtRoot 'lib\cmake\Qt5WebKitWidgets\Qt5WebKitWidgetsConfig.cmake'))) {
+              $nested = Get-ChildItem -Path $qtRoot -Directory | Where-Object {
+                Test-Path (Join-Path $_.FullName 'lib\cmake\Qt5WebKitWidgets\Qt5WebKitWidgetsConfig.cmake')
+              } | Select-Object -First 1
+              if ($nested) {
+                Write-Host "Merging nested QtWebKit directory: $($nested.FullName)"
+                Get-ChildItem -Path $nested.FullName | Copy-Item -Destination $qtRoot -Recurse -Force
+              }
+            }
+          }
+
+          $qtwebkitWidgetsDir = Join-Path $qtRoot 'lib\cmake\Qt5WebKitWidgets'
+          $qtwebkitDir = Join-Path $qtRoot 'lib\cmake\Qt5WebKit'
+          if (-not (Test-Path (Join-Path $qtwebkitWidgetsDir 'Qt5WebKitWidgetsConfig.cmake'))) {
+            throw "Qt5WebKitWidgetsConfig.cmake was not found under $qtwebkitWidgetsDir"
+          }
+          if (-not (Test-Path (Join-Path $qtwebkitDir 'Qt5WebKitConfig.cmake'))) {
+            throw "Qt5WebKitConfig.cmake was not found under $qtwebkitDir"
+          }
+          if (-not (Test-Path (Join-Path $qtRoot 'bin\Qt5WebKit.dll'))) {
+            throw "Qt5WebKit.dll was not found under $qtRoot\bin"
+          }
+
+          # QtWebKit 5.212 alpha4 prebuilts were packaged for Qt 5.14.x and their CMake
+          # configs use find_dependency_with_major_and_minor(..., 5, 14), which rejects Qt 5.15.
+          $webkitCmakeFiles = @(
+            (Join-Path $qtwebkitDir 'Qt5WebKitConfig.cmake')
+            (Join-Path $qtwebkitWidgetsDir 'Qt5WebKitWidgetsConfig.cmake')
+          )
+          foreach ($file in $webkitCmakeFiles) {
+            $content = Get-Content $file -Raw
+            if ($content -match 'find_dependency_with_major_and_minor\(Qt5\w+ 5 14\)') {
+              $patched = $content -replace 'find_dependency_with_major_and_minor\(Qt5(\w+) 5 14\)', 'find_dependency_with_major_and_minor(Qt5$1 5 15)'
+              Set-Content -Path $file -Value $patched -NoNewline
+              Write-Host "Patched $file for Qt $env:QT_VERSION"
+            }
+          }
+
+          "QTDIR=$qtRoot" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          "Qt5WebKit_DIR=$qtwebkitDir" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          "Qt5WebKitWidgets_DIR=$qtwebkitWidgetsDir" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          Write-Host "Qt root: $qtRoot"
+          Write-Host "Qt5WebKit_DIR: $qtwebkitDir"
+          Write-Host "Qt5WebKitWidgets_DIR: $qtwebkitWidgetsDir"
+
+      - name: Configure
+        shell: pwsh
+        run: |
+          Write-Host "CMAKE_PREFIX_PATH=$env:QTDIR"
+          Write-Host "Qt5_DIR=$env:QTDIR/lib/cmake/Qt5"
+          Write-Host "Qt5WebKit_DIR=$env:Qt5WebKit_DIR"
+          Write-Host "Qt5WebKitWidgets_DIR=$env:Qt5WebKitWidgets_DIR"
+          & cmake -S . -B build -G Ninja `
+            "-DCMAKE_BUILD_TYPE=$env:BUILD_TYPE" `
+            "-DCMAKE_PREFIX_PATH=$env:QTDIR" `
+            "-DQt5_DIR=$env:QTDIR/lib/cmake/Qt5" `
+            "-DQt5WebKit_DIR=$env:Qt5WebKit_DIR" `
+            "-DQt5WebKitWidgets_DIR=$env:Qt5WebKitWidgets_DIR" `
+            -DENABLE_QT5=ON `
+            -DENABLE_QTWEBKIT=ON `
+            -DENABLE_QTWEBENGINE=OFF `
+            -DENABLE_SPELLCHECK=OFF `
+            -DENABLE_CRASH_REPORTS=OFF
+
+      - name: Build
+        run: cmake --build build --config $env:BUILD_TYPE --parallel
+
+      - name: Deploy
+        shell: pwsh
+        run: |
+          $artifact = Join-Path $env:GITHUB_WORKSPACE 'artifact'
+          New-Item -ItemType Directory -Force -Path $artifact | Out-Null
+          Copy-Item -Path 'build\otter-browser.exe' -Destination $artifact
+          & "$env:QTDIR\bin\windeployqt.exe" --release --compiler-runtime --dir $artifact "$artifact\otter-browser.exe"
+          $locale = Join-Path $artifact 'locale'
+          New-Item -ItemType Directory -Force -Path $locale | Out-Null
+          Copy-Item -Path 'resources\translations\*.qm' -Destination $locale
+          $webkitBin = Join-Path $env:QTDIR 'bin'
+          $webkitDllPatterns = @(
+            'Qt5WebKit*.dll',
+            'libxml2.dll',
+            'libxslt.dll',
+            'icu*.dll'
+          )
+          foreach ($pattern in $webkitDllPatterns) {
+            Get-ChildItem -Path $webkitBin -Filter $pattern | ForEach-Object {
+              Copy-Item -Path $_.FullName -Destination $artifact -Force
+            }
+          }
+          Get-ChildItem -Path $env:QTDIR -Recurse -Include '*.pak','*.dat' | ForEach-Object {
+            Copy-Item -Path $_.FullName -Destination $artifact -Force
+          }
+          if (Test-Path "$env:QTDIR\plugins\webkit") {
+            Copy-Item -Path "$env:QTDIR\plugins\webkit" -Destination (Join-Path $artifact 'plugins') -Recurse -Force
+          }
+
+          # Qt 5.15 on Windows loads OpenSSL 1.1.x at runtime for HTTPS (QSslSocket).
+          $opensslDirs = @(
+            $env:OPENSSL_BIN
+            'C:\OpenSSL-1.1\bin'
+            'C:\Program Files\OpenSSL-Win64\bin'
+            'C:\Program Files\OpenSSL\bin'
+          ) | Where-Object { $_ -and (Test-Path $_) } | Select-Object -Unique
+          $opensslCopied = $false
+          foreach ($dir in $opensslDirs) {
+            if (-not (Test-Path $dir)) { continue }
+            foreach ($pattern in @('libssl-1_1*.dll', 'libcrypto-1_1*.dll')) {
+              Get-ChildItem -Path $dir -Filter $pattern -ErrorAction SilentlyContinue | ForEach-Object {
+                Copy-Item -Path $_.FullName -Destination $artifact -Force
+                $opensslCopied = $true
+                Write-Host "Copied $($_.Name) from $dir"
+              }
+            }
+          }
+          if (-not $opensslCopied) {
+            throw 'OpenSSL 1.1 DLLs were not found; HTTPS will not work.'
+          }
+
+          Compress-Archive -Path "$artifact\*" -DestinationPath 'otter-browser-windows-qtwebkit.zip' -Force
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: otter-browser-windows-qtwebkit
+          path: |
+            artifact
+            otter-browser-windows-qtwebkit.zip
