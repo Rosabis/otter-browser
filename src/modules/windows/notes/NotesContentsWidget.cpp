@@ -96,7 +96,7 @@ void NotesContentsWidget::print(QPrinter *printer)
 
 void NotesContentsWidget::addNote()
 {
-	m_ui->notesViewWidget->setCurrentIndex(NotesManager::addNote(BookmarksModel::UrlBookmark, {}, findFolder(m_ui->notesViewWidget->currentIndex()))->index());
+	m_ui->notesViewWidget->setCurrentIndex(NotesManager::addNote(BookmarksModel::UrlBookmark, {}, findFolder())->index());
 	m_ui->textEditWidget->setFocus();
 }
 
@@ -106,23 +106,23 @@ void NotesContentsWidget::addFolder()
 
 	if (!title.isEmpty())
 	{
-		m_ui->notesViewWidget->setCurrentIndex(NotesManager::addNote(BookmarksModel::FolderBookmark, {{BookmarksModel::TitleRole, title}}, findFolder(m_ui->notesViewWidget->currentIndex()))->index());
+		m_ui->notesViewWidget->setCurrentIndex(NotesManager::addNote(BookmarksModel::FolderBookmark, {{BookmarksModel::TitleRole, title}}, findFolder())->index());
 	}
 }
 
 void NotesContentsWidget::addSeparator()
 {
-	m_ui->notesViewWidget->setCurrentIndex(NotesManager::addNote(BookmarksModel::SeparatorBookmark, {}, findFolder(m_ui->notesViewWidget->currentIndex()))->index());
+	m_ui->notesViewWidget->setCurrentIndex(NotesManager::addNote(BookmarksModel::SeparatorBookmark, {}, findFolder())->index());
 }
 
 void NotesContentsWidget::removeNote()
 {
-	NotesManager::getModel()->trashBookmark(NotesManager::getModel()->getBookmark(m_ui->notesViewWidget->currentIndex()));
+	NotesManager::getModel()->trashBookmark(getBookmark());
 }
 
 void NotesContentsWidget::openUrl()
 {
-	const BookmarksModel::Bookmark *bookmark(NotesManager::getModel()->getBookmark(m_ui->notesViewWidget->currentIndex()));
+	const BookmarksModel::Bookmark *bookmark(getBookmark());
 
 	if (bookmark && bookmark->getUrl().isValid())
 	{
@@ -192,7 +192,7 @@ void NotesContentsWidget::showContextMenu(const QPoint &position)
 					{
 						menu.addAction(tr("Restore Note"), this, [&]()
 						{
-							NotesManager::getModel()->restoreBookmark(NotesManager::getModel()->getBookmark(m_ui->notesViewWidget->currentIndex()));
+							NotesManager::getModel()->restoreBookmark(getBookmark());
 						});
 					}
 					else
@@ -234,7 +234,7 @@ void NotesContentsWidget::triggerAction(int identifier, const QVariantMap &param
 		case ActionsManager::PasteAction:
 			if (!QGuiApplication::clipboard()->text().isEmpty())
 			{
-				NotesManager::addNote(BookmarksModel::UrlBookmark, {{BookmarksModel::DescriptionRole, QGuiApplication::clipboard()->text()}}, findFolder(m_ui->notesViewWidget->currentIndex()));
+				NotesManager::addNote(BookmarksModel::UrlBookmark, {{BookmarksModel::DescriptionRole, QGuiApplication::clipboard()->text()}}, findFolder());
 			}
 
 			break;
@@ -306,10 +306,10 @@ void NotesContentsWidget::updateText()
 	connect(m_ui->notesViewWidget, &ItemViewWidget::needsActionsUpdate, this, &NotesContentsWidget::updateActions);
 }
 
-BookmarksModel::Bookmark* NotesContentsWidget::findFolder(const QModelIndex &index)
+BookmarksModel::Bookmark* NotesContentsWidget::findFolder(const QModelIndex &index) const
 {
 	BookmarksModel *model(NotesManager::getModel());
-	BookmarksModel::Bookmark *bookmark(model->getBookmark(index));
+	BookmarksModel::Bookmark *bookmark(getBookmark(index));
 
 	if (!bookmark || bookmark == model->getRootItem() || bookmark == model->getTrashItem())
 	{
@@ -317,6 +317,11 @@ BookmarksModel::Bookmark* NotesContentsWidget::findFolder(const QModelIndex &ind
 	}
 
 	return (bookmark->isFolder() ? bookmark : bookmark->getParent());
+}
+
+BookmarksModel::Bookmark* NotesContentsWidget::getBookmark(const QModelIndex &index) const
+{
+	return NotesManager::getModel()->getBookmark(index.isValid() ? index : m_ui->notesViewWidget->currentIndex());
 }
 
 QVariant NotesContentsWidget::getCurrentIndexData(int role) const
@@ -380,7 +385,7 @@ bool NotesContentsWidget::eventFilter(QObject *object, QEvent *event)
 
 		if (mouseEvent->button() == Qt::MiddleButton || (mouseEvent->button() == Qt::LeftButton && mouseEvent->modifiers() != Qt::NoModifier))
 		{
-			const BookmarksModel::Bookmark *bookmark(NotesManager::getModel()->getBookmark(m_ui->notesViewWidget->indexAt(mouseEvent->pos())));
+			const BookmarksModel::Bookmark *bookmark(getBookmark(m_ui->notesViewWidget->indexAt(mouseEvent->pos())));
 
 			if (bookmark)
 			{
@@ -394,7 +399,7 @@ bool NotesContentsWidget::eventFilter(QObject *object, QEvent *event)
 	{
 		const QHelpEvent *helpEvent(static_cast<QHelpEvent*>(event));
 		const QModelIndex index(m_ui->notesViewWidget->indexAt(helpEvent->pos()));
-		const BookmarksModel::Bookmark *bookmark(NotesManager::getModel()->getBookmark(index));
+		const BookmarksModel::Bookmark *bookmark(getBookmark(index));
 
 		if (bookmark)
 		{

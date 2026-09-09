@@ -212,7 +212,7 @@ void CacheContentsWidget::openEntry()
 
 void CacheContentsWidget::handleEntryAdded(const QUrl &url)
 {
-	const QString domain(url.host());
+	const QString domain(Utils::extractHost(url));
 	QStandardItem *domainItem(findDomainItem(domain));
 
 	if (domainItem)
@@ -255,7 +255,8 @@ void CacheContentsWidget::handleEntryAdded(const QUrl &url)
 		}
 	}
 
-	const QMimeType mimeType((device && type.isEmpty()) ? QMimeDatabase().mimeTypeForData(device) : QMimeDatabase().mimeTypeForName(type));
+	const QMimeDatabase mimeDatabase;
+	const QMimeType mimeType((device && type.isEmpty()) ? mimeDatabase.mimeTypeForData(device) : mimeDatabase.mimeTypeForName(type));
 	QList<QStandardItem*> entryItems({new QStandardItem(url.path()), new QStandardItem(mimeType.name()), new QStandardItem(device ? Utils::formatUnit(device->size()) : QString()), new QStandardItem(Utils::formatDateTime(metaData.lastModified())), new QStandardItem(Utils::formatDateTime(metaData.expirationDate()))});
 	entryItems[0]->setData(url, UrlRole);
 	entryItems[0]->setFlags(entryItems[0]->flags() | Qt::ItemNeverHasChildren);
@@ -271,8 +272,7 @@ void CacheContentsWidget::handleEntryAdded(const QUrl &url)
 
 		if (sizeItem)
 		{
-			sizeItem->setData((sizeItem->data(SizeRole).toLongLong() + device->size()), SizeRole);
-			sizeItem->setText(Utils::formatUnit(sizeItem->data(SizeRole).toLongLong()));
+			setSize(sizeItem, (sizeItem->data(SizeRole).toLongLong() + device->size()));
 		}
 
 		device->deleteLater();
@@ -319,11 +319,10 @@ void CacheContentsWidget::handleEntryRemoved(const QUrl &url)
 
 			if (domainSizeItem && size > 0)
 			{
-				domainSizeItem->setData((domainSizeItem->data(SizeRole).toLongLong() - size), SizeRole);
-				domainSizeItem->setText(Utils::formatUnit(domainSizeItem->data(SizeRole).toLongLong()));
+				setSize(domainSizeItem, (domainSizeItem->data(SizeRole).toLongLong() - size));
 			}
 
-			domainItem->setText(QStringLiteral("%1 (%2)").arg(url.host(), QString::number(domainItem->rowCount())));
+			domainItem->setText(QStringLiteral("%1 (%2)").arg(Utils::extractHost(url), QString::number(domainItem->rowCount())));
 		}
 
 		break;
@@ -377,11 +376,17 @@ void CacheContentsWidget::showContextMenu(const QPoint &position)
 	menu.exec(m_ui->cacheViewWidget->mapToGlobal(position));
 }
 
+void CacheContentsWidget::setSize(QStandardItem *item, qint64 size)
+{
+	item->setData(size, SizeRole);
+	item->setText(Utils::formatUnit(size));
+}
+
 void CacheContentsWidget::updateActions()
 {
 	const QModelIndex index(m_ui->cacheViewWidget->getCurrentIndex());
 	const QUrl url(getEntry(index));
-	const QString domain((index.isValid() && index.parent() == m_model->invisibleRootItem()->index()) ? index.sibling(index.row(), 0).data(Qt::ToolTipRole).toString() : url.host());
+	const QString domain((index.isValid() && index.parent() == m_model->invisibleRootItem()->index()) ? index.sibling(index.row(), 0).data(Qt::ToolTipRole).toString() : Utils::extractHost(url));
 
 	m_ui->locationLabelWidget->setText({});
 	m_ui->locationLabelWidget->setUrl({});
@@ -446,7 +451,7 @@ void CacheContentsWidget::updateActions()
 		QImage image;
 		image.load(device, "");
 
-		if (image.size().width() > size || image.height() > size)
+		if (image.width() > size || image.height() > size)
 		{
 			image = image.scaled(size, size, Qt::KeepAspectRatio);
 		}
@@ -503,15 +508,13 @@ void CacheContentsWidget::updateActions()
 
 		if (sizeItem && sizeItem->text().isEmpty())
 		{
-			sizeItem->setText(Utils::formatUnit(device->size()));
-			sizeItem->setData(device->size(), SizeRole);
+			setSize(sizeItem, device->size());
 
 			QStandardItem *domainSizeItem(sizeItem->parent() ? m_model->item(sizeItem->parent()->row(), 2) : nullptr);
 
 			if (domainSizeItem)
 			{
-				domainSizeItem->setData((domainSizeItem->data(SizeRole).toLongLong() + device->size()), SizeRole);
-				domainSizeItem->setText(Utils::formatUnit(domainSizeItem->data(SizeRole).toLongLong()));
+				setSize(domainSizeItem, (domainSizeItem->data(SizeRole).toLongLong() + device->size()));
 			}
 		}
 

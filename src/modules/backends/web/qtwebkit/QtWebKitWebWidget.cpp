@@ -773,9 +773,9 @@ void QtWebKitWebWidget::triggerAction(int identifier, const QVariantMap &paramet
 				QMimeData *mimeData(new QMimeData());
 				const QStringList mimeTypes(Application::clipboard()->mimeData()->formats());
 
-				for (int i = 0; i < mimeTypes.count(); ++i)
+				for (const QString &mimeType: mimeTypes)
 				{
-					mimeData->setData(mimeTypes.at(i), Application::clipboard()->mimeData()->data(mimeTypes.at(i)));
+					mimeData->setData(mimeType, Application::clipboard()->mimeData()->data(mimeType));
 				}
 
 				Application::clipboard()->setText(parameters[QLatin1String("text")].toString());
@@ -895,55 +895,55 @@ void QtWebKitWebWidget::triggerAction(int identifier, const QVariantMap &paramet
 					searchTermsElement = parentElement.findFirst(QLatin1String("input:not([disabled])[name][type='search']"));
 				}
 
-				for (int i = 0; i < inputElements.count(); ++i)
+				for (QWebElement &inputElement: inputElements)
 				{
-					const QString name(inputElements.at(i).attribute(QLatin1String("name")));
+					const QString name(inputElement.attribute(QLatin1String("name")));
 
-					if (inputElements.at(i).tagName().toLower() != QLatin1String("select"))
+					if (inputElement.tagName().toLower() != QLatin1String("select"))
 					{
-						const QString type(inputElements.at(i).attribute(QLatin1String("type")));
+						const QString type(inputElement.attribute(QLatin1String("type")));
 						const bool isSubmit(type == QLatin1String("image") || type == QLatin1String("submit"));
 
-						if ((isSubmit && inputElements.at(i) != element) || ((type == QLatin1String("checkbox") || type == QLatin1String("radio")) && !inputElements[i].evaluateJavaScript(QLatin1String("this.checked")).toBool()))
+						if ((isSubmit && inputElement != element) || ((type == QLatin1String("checkbox") || type == QLatin1String("radio")) && !inputElement.evaluateJavaScript(QLatin1String("this.checked")).toBool()))
 						{
 							continue;
 						}
 
-						if (isSubmit && inputElements.at(i) == element)
+						if (isSubmit && inputElement == element)
 						{
-							if (inputElements.at(i).hasAttribute(QLatin1String("formaction")))
+							if (inputElement.hasAttribute(QLatin1String("formaction")))
 							{
-								searchEngine.resultsUrl.url = resolveUrl(parentElement.webFrame(), inputElements.at(i).attribute(QLatin1String("formaction"))).toString();
+								searchEngine.resultsUrl.url = resolveUrl(parentElement.webFrame(), inputElement.attribute(QLatin1String("formaction"))).toString();
 							}
 
-							if (inputElements.at(i).hasAttribute(QLatin1String("formenctype")))
+							if (inputElement.hasAttribute(QLatin1String("formenctype")))
 							{
-								searchEngine.resultsUrl.enctype = inputElements.at(i).attribute(QLatin1String("formenctype"));
+								searchEngine.resultsUrl.enctype = inputElement.attribute(QLatin1String("formenctype"));
 							}
 
-							if (inputElements.at(i).hasAttribute(QLatin1String("formmethod")))
+							if (inputElement.hasAttribute(QLatin1String("formmethod")))
 							{
-								searchEngine.resultsUrl.method = inputElements.at(i).attribute(QLatin1String("formmethod"));
+								searchEngine.resultsUrl.method = inputElement.attribute(QLatin1String("formmethod"));
 							}
 						}
 
 						if (!isSubmit && searchTermsElement.isNull() && type != QLatin1String("hidden"))
 						{
-							searchTermsElement = inputElements.at(i);
+							searchTermsElement = inputElement;
 						}
 
 						if (!name.isEmpty())
 						{
-							searchEngine.resultsUrl.parameters.addQueryItem(name, ((inputElements.at(i) == searchTermsElement) ? QLatin1String("{searchTerms}") : inputElements[i].evaluateJavaScript((inputElements.at(i).tagName().toLower() == QLatin1String("button")) ? QLatin1String("this.innerHTML") : QLatin1String("this.value")).toString()));
+							searchEngine.resultsUrl.parameters.addQueryItem(name, ((inputElement == searchTermsElement) ? QLatin1String("{searchTerms}") : inputElement.evaluateJavaScript((inputElement.tagName().toLower() == QLatin1String("button")) ? QLatin1String("this.innerHTML") : QLatin1String("this.value")).toString()));
 						}
 					}
 					else if (!name.isEmpty())
 					{
-						const QWebElementCollection optionElements(inputElements.at(i).findAll(QLatin1String("option:checked")));
+						QList<QWebElement> optionElements(inputElement.findAll(QLatin1String("option:checked")).toList());
 
-						for (int j = 0; j < optionElements.count(); ++j)
+						for (QWebElement &optionElement: optionElements)
 						{
-							searchEngine.resultsUrl.parameters.addQueryItem(name, optionElements.at(j).evaluateJavaScript(QLatin1String("this.value")).toString());
+							searchEngine.resultsUrl.parameters.addQueryItem(name, optionElement.evaluateJavaScript(QLatin1String("this.value")).toString());
 						}
 					}
 				}
@@ -1125,14 +1125,14 @@ void QtWebKitWebWidget::triggerAction(int identifier, const QVariantMap &paramet
 					const QVector<QNetworkCookie> cookiesToDelete(dialog.getCookiesToDelete());
 					const QVector<QNetworkCookie> cookiesToInsert(dialog.getCookiesToInsert());
 
-					for (int i = 0; i < cookiesToDelete.count(); ++i)
+					for (const QNetworkCookie &cookie: cookiesToDelete)
 					{
-						cookieJar->forceDeleteCookie(cookiesToDelete.at(i));
+						cookieJar->forceDeleteCookie(cookie);
 					}
 
-					for (int i = 0; i < cookiesToInsert.count(); ++i)
+					for (const QNetworkCookie &cookie: cookiesToInsert)
 					{
-						cookieJar->forceInsertCookie(cookiesToInsert.at(i));
+						cookieJar->forceInsertCookie(cookie);
 					}
 				}
 			}
@@ -1819,11 +1819,12 @@ void QtWebKitWebWidget::setHistory(const Session::Window::History &history)
 
 	for (int i = 0; i < history.entries.count(); ++i)
 	{
+		const Session::Window::History::Entry &historyEntry(history.entries.at(i));
 		QVariantMap entry;
 		entry[QLatin1String("pageScaleFactor")] = 0;
-		entry[QLatin1String("title")] = history.entries.at(i).title;
-		entry[QLatin1String("urlString")] = QString::fromLatin1(QUrl::fromUserInput(history.entries.at(i).url).toEncoded());
-		entry[QLatin1String("scrollPosition")] = QVariantMap({{QLatin1String("x"), history.entries.at(i).position.x()}, {QLatin1String("y"), history.entries.at(i).position.y()}});
+		entry[QLatin1String("title")] = historyEntry.title;
+		entry[QLatin1String("urlString")] = QString::fromLatin1(QUrl::fromUserInput(historyEntry.url).toEncoded());
+		entry[QLatin1String("scrollPosition")] = QVariantMap({{QLatin1String("x"), historyEntry.position.x()}, {QLatin1String("y"), historyEntry.position.y()}});
 
 		entries.append(entry);
 	}
@@ -1832,7 +1833,9 @@ void QtWebKitWebWidget::setHistory(const Session::Window::History &history)
 
 	for (int i = 0; i < history.entries.count(); ++i)
 	{
-		m_page->history()->itemAt(i).setUserData(QVariantList({-1, history.entries.at(i).zoom, history.entries.at(i).position, history.entries.at(i).time}));
+		const Session::Window::History::Entry &historyEntry(history.entries.at(i));
+
+		m_page->history()->itemAt(i).setUserData(QVariantList({-1, historyEntry.zoom, historyEntry.position, historyEntry.time}));
 	}
 
 	m_page->history()->goToItem(m_page->history()->itemAt(index));
@@ -2460,9 +2463,9 @@ QStringList QtWebKitWebWidget::getStyleSheets() const
 	QStringList titles;
 	titles.reserve(elements.count());
 
-	for (int i = 0; i < elements.count(); ++i)
+	for (const QWebElement &element: elements)
 	{
-		const QString title(elements.at(i).attribute(QLatin1String("title")));
+		const QString title(element.attribute(QLatin1String("title")));
 
 		if (!title.isEmpty() && !titles.contains(title))
 		{
@@ -2487,9 +2490,9 @@ QVector<WebWidget::LinkUrl> QtWebKitWebWidget::getLinks(const QString &query) co
 	QVector<LinkUrl> links;
 	links.reserve(elements.count());
 
-	for (int i = 0; i < elements.count(); ++i)
+	for (const QWebElement &element: elements)
 	{
-		const QUrl url(resolveUrl(m_page->mainFrame(), QUrl(elements.at(i).attribute(QLatin1String("href")))));
+		const QUrl url(resolveUrl(m_page->mainFrame(), QUrl(element.attribute(QLatin1String("href")))));
 
 		if (urls.contains(url))
 		{
@@ -2499,18 +2502,18 @@ QVector<WebWidget::LinkUrl> QtWebKitWebWidget::getLinks(const QString &query) co
 		urls.insert(url);
 
 		LinkUrl link;
-		link.title = elements.at(i).attribute(QLatin1String("title"));
-		link.mimeType = elements.at(i).attribute(QLatin1String("type"));
+		link.title = element.attribute(QLatin1String("title"));
+		link.mimeType = element.attribute(QLatin1String("type"));
 		link.url = url;
 
 		if (link.title.isEmpty())
 		{
-			link.title = elements.at(i).toPlainText().simplified();
+			link.title = element.toPlainText().simplified();
 		}
 
 		if (link.title.isEmpty())
 		{
-			const QWebElement imageElement(elements.at(i).findFirst(QLatin1String("img[alt]:not([alt=''])")));
+			const QWebElement imageElement(element.findFirst(QLatin1String("img[alt]:not([alt=''])")));
 
 			if (!imageElement.isNull())
 			{

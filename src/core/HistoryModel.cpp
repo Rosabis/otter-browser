@@ -100,9 +100,9 @@ HistoryModel::HistoryModel(const QString &path, HistoryType type, QObject *paren
 
 	file.close();
 
-	for (int i = 0; i < historyArray.count(); ++i)
+	for (const QJsonValue &entryValue: historyArray)
 	{
-		const QJsonObject entryObject(historyArray.at(i).toObject());
+		const QJsonObject entryObject(entryValue.toObject());
 		QDateTime dateTime(QDateTime::fromString(entryObject.value(QLatin1String("time")).toString(), Qt::ISODate));
 		dateTime.setTimeZone(QTimeZone::utc());
 
@@ -140,9 +140,11 @@ void HistoryModel::clearRecentEntries(uint period)
 
 	for (int i = (rowCount() - 1); i >= 0; --i)
 	{
-		if (index(i, 0).data(TimeVisitedRole).toDateTime().secsTo(QDateTime::currentDateTimeUtc()) < (static_cast<qint64>(period) * 3600))
+		const QModelIndex index(this->index(i, 0));
+
+		if (index.data(TimeVisitedRole).toDateTime().secsTo(QDateTime::currentDateTimeUtc()) < (static_cast<qint64>(period) * 3600))
 		{
-			removeEntry(index(i, 0).data(IdentifierRole).toULongLong());
+			removeEntry(index.data(IdentifierRole).toULongLong());
 		}
 	}
 }
@@ -158,9 +160,11 @@ void HistoryModel::clearOldestEntries(int period)
 
 	for (int i = (rowCount() - 1); i >= 0; --i)
 	{
-		if (index(i, 0).data(TimeVisitedRole).toDateTime().daysTo(currentDateTime) > period)
+		const QModelIndex index(this->index(i, 0));
+
+		if (index.data(TimeVisitedRole).toDateTime().daysTo(currentDateTime) > period)
 		{
-			removeEntry(index(i, 0).data(IdentifierRole).toULongLong());
+			removeEntry(index.data(IdentifierRole).toULongLong());
 		}
 	}
 }
@@ -284,7 +288,14 @@ QVector<HistoryModel::HistoryEntryMatch> HistoryModel::findEntries(const QString
 
 	for (urlsIterator = m_urls.constBegin(); urlsIterator != m_urls.constEnd(); ++urlsIterator)
 	{
-		if (urlsIterator.value().isEmpty() || matchedEntries.contains(urlsIterator.value().value(0)))
+		if (urlsIterator.value().isEmpty())
+		{
+			continue;
+		}
+
+		Entry *entry(urlsIterator.value().value(0));
+
+		if (matchedEntries.contains(entry))
 		{
 			continue;
 		}
@@ -294,7 +305,7 @@ QVector<HistoryModel::HistoryEntryMatch> HistoryModel::findEntries(const QString
 		if (!result.isEmpty())
 		{
 			HistoryEntryMatch match;
-			match.entry = urlsIterator.value().value(0);
+			match.entry = entry;
 			match.match = result;
 
 			if (markAsTypedIn)

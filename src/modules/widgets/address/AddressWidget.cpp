@@ -1,6 +1,6 @@
 /**************************************************************************
 * Otter Browser: Web browser controlled by the user, not vice-versa.
-* Copyright (C) 2013 - 2024 Michal Dutkiewicz aka Emdek <michal@emdek.pl>
+* Copyright (C) 2013 - 2026 Michal Dutkiewicz aka Emdek <michal@emdek.pl>
 * Copyright (C) 2014 - 2017 Jan Bajer aka bajasoft <jbajer@gmail.com>
 * Copyright (C) 2014 Piotr Wójcik <chocimier@tlen.pl>
 *
@@ -186,9 +186,8 @@ void AddressDelegate::drawCompletionText(QPainter *painter, const QFont &font, c
 	const QFontMetrics highlightFontMetrics(highlightFont);
 	const int xLength(highlightFontMetrics.horizontalAdvance(QLatin1Char('X')));
 
-	for (int i = 0; i < segments.count(); ++i)
+	for (const TextSegment &segment: segments)
 	{
-		const TextSegment segment(segments.at(i));
 		const QFontMetrics segmentFontMetrics(segment.isHighlighted ? highlightFontMetrics : fontMetrics);
 		const int maximumLength(availableRectangle.width() - xLength);
 		const int length(segmentFontMetrics.horizontalAdvance(segment.text));
@@ -225,22 +224,23 @@ QVector<AddressDelegate::TextSegment> AddressDelegate::highlightSegments(const Q
 
 	QVector<TextSegment> highlightedSegments;
 
-	for (int i = 0; i < segments.count(); ++i)
+	for (const TextSegment &segment: segments)
 	{
-		const TextSegment segment(segments.at(i));
 		const QStringList subSegments(segment.text.split(highlight, Qt::KeepEmptyParts, Qt::CaseInsensitive));
 		int highlightAmount(0);
 
-		for (int j = 0; j < subSegments.count(); ++j)
+		for (int i = 0; i < subSegments.count(); ++i)
 		{
-			if (subSegments.at(j).isEmpty())
+			const QString subSegment(subSegments.at(i));
+
+			if (subSegment.isEmpty())
 			{
-				if (j > 0)
+				if (i > 0)
 				{
 					++highlightAmount;
 				}
 
-				if (j >= (subSegments.count() - 1) || !subSegments.at(j + 1).isEmpty())
+				if (i >= (subSegments.count() - 1) || !subSegments.at(i + 1).isEmpty())
 				{
 					highlightedSegments.append(TextSegment(highlight.repeated(highlightAmount), segment.color, true));
 
@@ -249,12 +249,12 @@ QVector<AddressDelegate::TextSegment> AddressDelegate::highlightSegments(const Q
 					continue;
 				}
 			}
-			else if (j > 0)
+			else if (i > 0)
 			{
 				highlightedSegments.append(TextSegment(highlight.repeated(highlightAmount + 1), segment.color, true));
 			}
 
-			highlightedSegments.append(TextSegment(subSegments.at(j), segment.color));
+			highlightedSegments.append(TextSegment(subSegment, segment.color));
 		}
 	}
 
@@ -319,7 +319,7 @@ AddressWidget::AddressWidget(Window *window, QWidget *parent) : LineEditWidget(p
 
 	connect(this, &AddressWidget::requestedPopupEntryRemoval, [&](const QModelIndex &index)
 	{
-		if (index.isValid() && index.data(AddressCompletionModel::IsRemovableRole).toBool() && index.data(AddressCompletionModel::TypeRole).toInt() == AddressCompletionModel::CompletionEntry::TypedHistoryType)
+		if (index.isValid() && index.data(AddressCompletionModel::IsRemovableRole).toBool() && static_cast<AddressCompletionModel::CompletionEntry::EntryType>(index.data(AddressCompletionModel::TypeRole).toInt()) == AddressCompletionModel::CompletionEntry::TypedHistoryType)
 		{
 			HistoryManager::getTypedHistoryModel()->removeEntry(index.data(AddressCompletionModel::HistoryIdentifierRole).toULongLong());
 
@@ -618,9 +618,9 @@ void AddressWidget::mouseReleaseEvent(QMouseEvent *event)
 					{
 						QMenu menu;
 
-						for (int i = 0; i < feeds.count(); ++i)
+						for (const WebWidget::LinkUrl &feed: feeds)
 						{
-							menu.addAction(feeds.at(i).title.isEmpty() ? tr("(Untitled)") : feeds.at(i).title)->setData(FeedsManager::createFeedReaderUrl(feeds.at(i).url));
+							menu.addAction(feed.title.isEmpty() ? tr("(Untitled)") : feed.title)->setData(FeedsManager::createFeedReaderUrl(feed.url));
 						}
 
 						connect(&menu, &QMenu::triggered, this, [&](QAction *action)
@@ -648,9 +648,9 @@ void AddressWidget::mouseReleaseEvent(QMouseEvent *event)
 						{
 							const QVector<BookmarksModel::Bookmark*> bookmarks(BookmarksManager::getModel()->findUrls(url));
 
-							for (int i = 0; i < bookmarks.count(); ++i)
+							for (BookmarksModel::Bookmark *bookmark: bookmarks)
 							{
-								BookmarksManager::getModel()->trashBookmark(bookmarks.at(i));
+								BookmarksManager::getModel()->trashBookmark(bookmark);
 							}
 						}
 						else
@@ -887,9 +887,9 @@ void AddressWidget::handleOptionChanged(int identifier, const QVariant &value)
 				QVector<EntryIdentifier> layout;
 				layout.reserve(rawLayout.count());
 
-				for (int i = 0; i < rawLayout.count(); ++i)
+				for (const QString &rawIdentifier: rawLayout)
 				{
-					const EntryIdentifier entryIdentifier(static_cast<EntryIdentifier>(enumeratorMapper.mapToValue(rawLayout.at(i).toLatin1())));
+					const EntryIdentifier entryIdentifier(static_cast<EntryIdentifier>(enumeratorMapper.mapToValue(rawIdentifier.toLatin1())));
 
 					if (entryIdentifier > UnknownEntry && !layout.contains(entryIdentifier))
 					{
@@ -988,9 +988,8 @@ void AddressWidget::updateEntries(const QVector<EntryIdentifier> &identifiers)
 	bool needsUpdate(false);
 	bool needsRepaint(false);
 
-	for (int i = 0; i < identifiers.count(); ++i)
+	for (const EntryIdentifier identifier: identifiers)
 	{
-		const EntryIdentifier identifier(identifiers.at(i));
 		const bool isUpdating(m_entries.contains(identifier));
 
 		if (!m_layout.contains(identifier))
@@ -1174,14 +1173,14 @@ void AddressWidget::updateGeometries()
 		availableWidth -= 16;
 	}
 
-	for (int i = 0; i < m_layout.count(); ++i)
+	for (const EntryIdentifier identifier: std::as_const(m_layout))
 	{
-		if (m_layout.at(i) == AddressEntry)
+		if (identifier == AddressEntry)
 		{
 			isLeading = !isLeading;
 		}
 
-		switch (m_layout.at(i))
+		switch (identifier)
 		{
 			case AddressEntry:
 			case HistoryDropdownEntry:
@@ -1198,7 +1197,7 @@ void AddressWidget::updateGeometries()
 				break;
 		}
 
-		const EntryDefinition definition(m_entries.value(m_layout.at(i)));
+		const EntryDefinition definition(m_entries.value(identifier));
 
 		if (isLeading)
 		{
