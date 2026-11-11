@@ -208,11 +208,9 @@ void AddonsPage::load()
 
 	for (const ModelColumn &column: columns)
 	{
-		const int width(column.width);
-
-		if (width > 0)
+		if (column.width > 0)
 		{
-			getModel()->setHeaderData(++index, Qt::Horizontal, width, HeaderViewWidget::WidthRole);
+			getModel()->setHeaderData(++index, Qt::Horizontal, column.width, HeaderViewWidget::WidthRole);
 		}
 	}
 
@@ -369,14 +367,7 @@ QModelIndexList AddonsPage::getSelectedIndexes() const
 
 QVector<AddonsPage::ModelColumn> AddonsPage::getModelColumns() const
 {
-	ModelColumn titleColumn;
-	titleColumn.label = tr("Title");
-	titleColumn.width = 250;
-
-	ModelColumn versionColumn;
-	versionColumn.label = tr("Version");
-
-	return {titleColumn, versionColumn};
+	return {{tr("Title"), 250}, {tr("Version")}};
 }
 
 WebWidget::LoadingState AddonsPage::getLoadingState() const

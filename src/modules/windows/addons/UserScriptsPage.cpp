@@ -36,11 +36,11 @@ UserScriptsPage::UserScriptsPage(bool needsDetails, QWidget *parent) : AddonsPag
 {
 	connect(AddonsManager::getInstance(), &AddonsManager::userScriptModified, this, [&](const QString &name)
 	{
-		Addon *addon(AddonsManager::getUserScript(name));
+		UserScript *script(AddonsManager::getUserScript(name));
 
-		if (addon)
+		if (script)
 		{
-			updateAddonEntry(addon);
+			updateAddonEntry(script);
 		}
 	});
 }
@@ -49,9 +49,9 @@ void UserScriptsPage::delayedLoad()
 {
 	const QStringList userScripts(AddonsManager::getAddons(Addon::UserScriptType));
 
-	for (int i = 0; i < userScripts.count(); ++i)
+	for (const QString &name: userScripts)
 	{
-		UserScript *script(AddonsManager::getUserScript(userScripts.at(i)));
+		UserScript *script(AddonsManager::getUserScript(name));
 
 		if (script)
 		{
@@ -163,48 +163,48 @@ void UserScriptsPage::addAddon()
 
 void UserScriptsPage::openAddons()
 {
-	const QVector<UserScript*> addons(getSelectedUserScripts());
+	const QVector<UserScript*> scripts(getSelectedUserScripts());
 
-	for (UserScript *addon: addons)
+	for (UserScript *script: scripts)
 	{
-		Utils::runApplication({}, addon->getPath());
+		Utils::runApplication({}, script->getPath());
 	}
 }
 
 void UserScriptsPage::reloadAddons()
 {
-	const QVector<UserScript*> addons(getSelectedUserScripts());
+	const QVector<UserScript*> scripts(getSelectedUserScripts());
 
-	for (UserScript *addon: addons)
+	for (UserScript *script: scripts)
 	{
-		addon->reload();
+		script->reload();
 
-		updateAddonEntry(addon);
+		updateAddonEntry(script);
 	}
 }
 
 void UserScriptsPage::removeAddons()
 {
-	const QVector<UserScript*> addons(getSelectedUserScripts());
+	const QVector<UserScript*> scripts(getSelectedUserScripts());
 
-	if (addons.isEmpty() || !confirmAddonsRemoval(addons.count()))
+	if (scripts.isEmpty() || !confirmAddonsRemoval(scripts.count()))
 	{
 		return;
 	}
 
-	bool hasAddonsToRemove(false);
+	bool hasScriptsToRemove(false);
 
-	for (UserScript *addon: addons)
+	for (UserScript *script: scripts)
 	{
-		if (addon->canRemove())
+		if (script->canRemove())
 		{
-			m_addonsToRemove.append(addon->getName());
+			m_addonsToRemove.append(script->getName());
 
-			hasAddonsToRemove = true;
+			hasScriptsToRemove = true;
 		}
 	}
 
-	if (hasAddonsToRemove)
+	if (hasScriptsToRemove)
 	{
 		emit settingsModified();
 	}
@@ -212,16 +212,13 @@ void UserScriptsPage::removeAddons()
 
 void UserScriptsPage::updateDetails()
 {
-	const QVector<UserScript*> selectedUserScripts(getSelectedUserScripts());
-	DetailsEntry titleEntry;
-	titleEntry.label = tr("Title:");
+	const QVector<UserScript*> sripts(getSelectedUserScripts());
+	DetailsEntry titleEntry(tr("Title:"));
+	DetailsEntry homePageEntry(tr("Homepage:"));
 
-	DetailsEntry homePageEntry;
-	homePageEntry.label = tr("Homepage:");
-
-	if (selectedUserScripts.count() == 1)
+	if (sripts.count() == 1)
 	{
-		UserScript *script(selectedUserScripts.first());
+		UserScript *script(sripts.first());
 
 		if (script)
 		{
@@ -229,7 +226,7 @@ void UserScriptsPage::updateDetails()
 
 			titleEntry.value = script->getTitle();
 			homePageEntry.value = homePage.toDisplayString();
-			homePageEntry.isUrl = !homePage.isEmpty();
+			homePageEntry.isUrl = !homePage.isValid();
 		}
 	}
 
@@ -240,11 +237,11 @@ void UserScriptsPage::save()
 {
 	for (int i = 0; i < m_addonsToRemove.count(); ++i)
 	{
-		Addon *addon(AddonsManager::getUserScript(m_addonsToRemove.at(i)));
+		UserScript *script(AddonsManager::getUserScript(m_addonsToRemove.at(i)));
 
-		if (addon)
+		if (script)
 		{
-			addon->remove();
+			script->remove();
 		}
 	}
 
@@ -306,12 +303,12 @@ QVariant UserScriptsPage::getAddonIdentifier(Addon *addon) const
 QVector<UserScript*> UserScriptsPage::getSelectedUserScripts() const
 {
 	const QModelIndexList indexes(getSelectedIndexes());
-	QVector<UserScript*> userScripts;
-	userScripts.reserve(indexes.count());
+	QVector<UserScript*> scripts;
+	scripts.reserve(indexes.count());
 
-	for (int i = 0; i < indexes.count(); ++i)
+	for (const QModelIndex &index: indexes)
 	{
-		const QString identifier(indexes.at(i).data(IdentifierRole).toString());
+		const QString identifier(index.data(IdentifierRole).toString());
 
 		if (!identifier.isEmpty())
 		{
@@ -319,14 +316,14 @@ QVector<UserScript*> UserScriptsPage::getSelectedUserScripts() const
 
 			if (script)
 			{
-				userScripts.append(script);
+				scripts.append(script);
 			}
 		}
 	}
 
-	userScripts.squeeze();
+	scripts.squeeze();
 
-	return userScripts;
+	return scripts;
 }
 
 bool UserScriptsPage::canOpenAddons() const

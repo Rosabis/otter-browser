@@ -207,7 +207,7 @@ void SearchPreferencesPage::updateSearchEngine()
 		m_updateAnimation = ThemesManager::createAnimation();
 		m_updateAnimation->start();
 
-		connect(m_updateAnimation, &Animation::frameChanged, m_ui->searchViewWidget->viewport(), static_cast<void(QWidget::*)()>(&QWidget::update));
+		connect(m_updateAnimation, &Animation::frameChanged, m_ui->searchViewWidget->viewport(), qOverload<>(&QWidget::update));
 	}
 
 	m_ui->searchViewWidget->setData(index, true, IsUpdatingRole);

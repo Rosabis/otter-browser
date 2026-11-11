@@ -57,17 +57,28 @@ public slots:
 	virtual void addAddon() = 0;
 
 protected:
-	struct ModelColumn
+	struct ModelColumn final
 	{
 		QString label;
 		int width = 0;
+
+		ModelColumn(const QString &labelValue, int widthValue = 0) : label(labelValue),
+			width(widthValue)
+		{
+		}
 	};
 
-	struct DetailsEntry
+	struct DetailsEntry final
 	{
 		QString label;
 		QString value;
 		bool isUrl = false;
+
+		DetailsEntry(const QString &labelValue, const QString &valueValue = {}, bool isUrlValue = false) : label(labelValue),
+			value(valueValue),
+			isUrl(isUrlValue)
+		{
+		}
 	};
 
 	void timerEvent(QTimerEvent *event) override;
@@ -75,7 +86,8 @@ protected:
 	virtual void addAddonEntry(Addon *addon, const QMap<int, QVariant> &metaData = {});
 	virtual void updateAddonEntry(Addon *addon);
 	void load() final override;
-	virtual void delayedLoad() = 0;	void markAsFullyLoaded();
+	virtual void delayedLoad() = 0;
+	void markAsFullyLoaded();
 	void updateModelColumns();
 	ItemViewWidget* getViewWidget() const;
 	QStandardItemModel* getModel() const;

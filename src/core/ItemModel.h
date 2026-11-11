@@ -53,6 +53,7 @@ public:
 		explicit Item(const QString &title, ItemModel::ItemType type = EntryType);
 		explicit Item(const QIcon &icon, const QString &title, ItemModel::ItemType type = EntryType);
 
+		bool isFolder() const;
 		bool isAncestorOf(QStandardItem *child) const;
 
 	protected:
@@ -81,6 +82,14 @@ protected:
 private:
 	bool m_isExclusive;
 	bool m_isIgnoringCheckStateReset;
+};
+
+class TrashableItemModel : public ItemModel
+{
+	Q_OBJECT
+
+public:
+	explicit TrashableItemModel(QObject *parent = nullptr);
 };
 
 }

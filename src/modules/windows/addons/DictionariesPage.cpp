@@ -165,18 +165,13 @@ void DictionariesPage::removeAddons()
 void DictionariesPage::updateDetails()
 {
 	const QStringList selectedDictionaries(getSelectedDictionaries());
-	DetailsEntry titleEntry;
-	titleEntry.label = tr("Title:");
-
-	DetailsEntry codeEntry;
-	codeEntry.label = tr("Language Code:");
-
-	DetailsEntry locationEntry;
-	locationEntry.label = tr("Location:");
+	DetailsEntry titleEntry(tr("Title:"));
+	DetailsEntry codeEntry(tr("Language Code:"));
+	DetailsEntry locationEntry(tr("Location:"));
 
 	if (selectedDictionaries.count() == 1)
 	{
-		SpellCheckManager::Dictionary dictionary(SpellCheckManager::getDictionary(selectedDictionaries.first()));
+		const SpellCheckManager::Dictionary dictionary(SpellCheckManager::getDictionary(selectedDictionaries.first()));
 
 		if (dictionary.isValid())
 		{
@@ -242,9 +237,9 @@ QStringList DictionariesPage::getSelectedDictionaries() const
 	QStringList selectedDictionaries;
 	selectedDictionaries.reserve(indexes.count());
 
-	for (int i = 0; i < indexes.count(); ++i)
+	for (const QModelIndex &index: indexes)
 	{
-		const QString identifier(indexes.at(i).data(IdentifierRole).toString());
+		const QString identifier(index.data(IdentifierRole).toString());
 
 		if (!identifier.isEmpty())
 		{
@@ -257,10 +252,7 @@ QStringList DictionariesPage::getSelectedDictionaries() const
 
 QVector<AddonsPage::ModelColumn> DictionariesPage::getModelColumns() const
 {
-	ModelColumn titleColumn;
-	titleColumn.label = tr("Title");
-
-	return {titleColumn};
+	return {{tr("Title")}};
 }
 
 bool DictionariesPage::canOpenAddons() const

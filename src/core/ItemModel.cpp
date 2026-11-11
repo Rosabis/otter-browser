@@ -59,6 +59,11 @@ void ItemModel::Item::setup(ItemModel::ItemType type)
 	}
 }
 
+bool ItemModel::Item::isFolder() const
+{
+	return (data(TypeRole) == FolderType);
+}
+
 bool ItemModel::Item::isAncestorOf(QStandardItem *child) const
 {
 	if (child == nullptr || child == this)
@@ -190,7 +195,7 @@ QVariant ItemModel::data(const QModelIndex &index, int role) const
 
 QVariant ItemModel::headerData(int section, Qt::Orientation orientation, int role) const
 {
-	if (role == Qt::DecorationRole && !headerData(section, orientation, Qt::CheckStateRole).isNull())
+	if (role == Qt::DecorationRole && !QStandardItemModel::headerData(section, orientation, Qt::CheckStateRole).isNull())
 	{
 		QPixmap pixmap(16, 16);
 		pixmap.fill(Qt::transparent);
@@ -329,6 +334,10 @@ bool ItemModel::setData(const QModelIndex &index, const QVariant &value, int rol
 	}
 
 	return QStandardItemModel::setData(index, value, role);
+}
+
+TrashableItemModel::TrashableItemModel(QObject *parent) : ItemModel(parent)
+{
 }
 
 }
