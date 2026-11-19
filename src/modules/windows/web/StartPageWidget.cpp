@@ -887,7 +887,7 @@ void StartPageWidget::startReloadingAnimation()
 		m_spinnerAnimation->start();
 	}
 
-	connect(m_spinnerAnimation, &Animation::frameChanged, m_listView, qOverload<>(&QListView::update), Qt::UniqueConnection);
+	connect(m_spinnerAnimation, &Animation::frameChanged, m_listView, qOverload<>(&QWidget::update), Qt::UniqueConnection);
 }
 
 void StartPageWidget::handleOptionChanged(int identifier, const QVariant &value)
