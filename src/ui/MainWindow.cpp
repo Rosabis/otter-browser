@@ -1608,9 +1608,8 @@ void MainWindow::beginToolBarDragging(bool isSidebar)
 
 	const QList<ToolBarWidget*> toolBars(findChildren<ToolBarWidget*>(QString(), Qt::FindDirectChildrenOnly));
 
-	for (int i = 0; i < toolBars.count(); ++i)
+	for (ToolBarWidget *toolBar: toolBars)
 	{
-		ToolBarWidget *toolBar(toolBars.at(i));
 		const Qt::ToolBarArea area(toolBarArea(toolBar));
 
 		if (toolBar->isVisible() && (!isSidebar || area == Qt::LeftToolBarArea || area == Qt::RightToolBarArea))
@@ -1638,10 +1637,8 @@ void MainWindow::endToolBarDragging()
 {
 	const QList<ToolBarDropZoneWidget*> dropZones(findChildren<ToolBarDropZoneWidget*>());
 
-	for (int i = 0; i < dropZones.count(); ++i)
+	for (ToolBarDropZoneWidget *dropZone: dropZones)
 	{
-		ToolBarDropZoneWidget *dropZone(dropZones.at(i));
-
 		removeToolBarBreak(dropZone);
 		removeToolBar(dropZone);
 
@@ -1823,9 +1820,9 @@ void MainWindow::handleToolBarAdded(int identifier)
 	}
 	else
 	{
-		for (int i = 0; i < toolBars.count(); ++i)
+		for (ToolBarWidget *toolBar: std::as_const(toolBars))
 		{
-			removeToolBar(toolBars.at(i));
+			removeToolBar(toolBar);
 		}
 
 		toolBars.append(newToolBar);
@@ -1918,14 +1915,10 @@ void MainWindow::updateShortcuts()
 
 	m_shortcuts.reserve(definitions.count() * 2);
 
-	for (int i = 0; i < definitions.count(); ++i)
+	for (const KeyboardProfile::Action &definition: definitions)
 	{
-		const KeyboardProfile::Action &definition(definitions.at(i));
-
-		for (int j = 0; j < definition.shortcuts.count(); ++j)
+		for (const QKeySequence &shortcut: definition.shortcuts)
 		{
-			const QKeySequence shortcut(definition.shortcuts.at(j));
-
 			if (ActionsManager::isShortcutAllowed(shortcut))
 			{
 				m_shortcuts.append(new Shortcut(definition.action, shortcut, definition.parameters, this));

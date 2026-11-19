@@ -33,6 +33,8 @@ public:
 	enum ItemType
 	{
 		UnknownType = 0,
+		RootType,
+		TrashType,
 		FolderType,
 		EntryType,
 		SeparatorType
@@ -41,8 +43,10 @@ public:
 	enum ItemRole
 	{
 		TitleRole = Qt::DisplayRole,
+		UrlRole = Qt::StatusTipRole,
 		DescriptionRole = Qt::ToolTipRole,
 		TypeRole = Qt::UserRole,
+		IdentifierRole,
 		UserRole
 	};
 
@@ -90,6 +94,13 @@ class TrashableItemModel : public ItemModel
 
 public:
 	explicit TrashableItemModel(QObject *parent = nullptr);
+
+	Item* getRootItem() const;
+	Item* getTrashItem() const;
+
+private:
+	Item *m_rootItem;
+	Item *m_trashItem;
 };
 
 }

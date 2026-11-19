@@ -45,6 +45,15 @@ void ItemModel::Item::setup(ItemModel::ItemType type)
 
 	switch (type)
 	{
+		case RootType:
+			setDragEnabled(false);
+
+			break;
+		case TrashType:
+			setDragEnabled(false);
+			setEnabled(false);
+
+			break;
 		case EntryType:
 			setFlags(flags() | Qt::ItemNeverHasChildren);
 
@@ -61,7 +70,17 @@ void ItemModel::Item::setup(ItemModel::ItemType type)
 
 bool ItemModel::Item::isFolder() const
 {
-	return (data(TypeRole) == FolderType);
+	switch (static_cast<ItemModel::ItemType>(data(TypeRole).toInt()))
+	{
+		case RootType:
+		case TrashType:
+		case FolderType:
+			return true;
+		default:
+			return false;
+	}
+
+	return false;
 }
 
 bool ItemModel::Item::isAncestorOf(QStandardItem *child) const
@@ -336,8 +355,22 @@ bool ItemModel::setData(const QModelIndex &index, const QVariant &value, int rol
 	return QStandardItemModel::setData(index, value, role);
 }
 
-TrashableItemModel::TrashableItemModel(QObject *parent) : ItemModel(parent)
+TrashableItemModel::TrashableItemModel(QObject *parent) : ItemModel(parent),
+	m_rootItem(new Item(RootType)),
+	m_trashItem(new Item(TrashType))
 {
+	appendRow(m_rootItem);
+	appendRow(m_trashItem);
+}
+
+ItemModel::Item* TrashableItemModel::getRootItem() const
+{
+	return m_rootItem;
+}
+
+ItemModel::Item* TrashableItemModel::getTrashItem() const
+{
+	return m_trashItem;
 }
 
 }
